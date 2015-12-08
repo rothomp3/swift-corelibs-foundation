@@ -50,4 +50,6 @@ XCTMain([
     TestNSByteCountFormatter(),
     TestNSURLResponse(),
     TestNSNotificationCenter(),
+    TestNSKeyedArchiver()
+>>>>>>> 19f7bf1... NSKeyedArchiver begins to work
 ])

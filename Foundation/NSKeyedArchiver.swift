@@ -7,12 +7,19 @@
 // See http://swift.org/CONTRIBUTORS.txt for the list of Swift project authors
 //
 
-
+import CoreFoundation
 
 // Archives created using the class method archivedRootDataWithObject used this key for the root object in the hierarchy of encoded objects. The NSKeyedUnarchiver class method unarchiveObjectWithData: will look for this root key as well. You can also use it as the key for the root object in your own archives.
 public let NSKeyedArchiveRootObjectKey: String = "root"
 
 public class NSKeyedArchiver : NSCoder {
+    
+    private static var keyCallbacks = kCFTypeDictionaryKeyCallBacks
+    private static var valueCallbacks = kCFTypeDictionaryValueCallBacks
+    
+    private let _data: NSMutableData
+    
+    internal var _rootDict: [String : AnyObject]
     
     public class func archivedDataWithRootObject(rootObject: AnyObject) -> NSData {
         NSUnimplemented()
@@ -23,33 +30,58 @@ public class NSKeyedArchiver : NSCoder {
     }
     
     public init(forWritingWithMutableData data: NSMutableData) {
-        NSUnimplemented()
+        _data = data
+        outputFormat = .BinaryFormat_v1_0
+        _rootDict = [:]
+        
+        _rootDict["$archiver".bridge()] = "\(self.dynamicType)".bridge()
+        let objectsArray = NSMutableArray()
+        objectsArray.addObject("$null".bridge())
+        _rootDict["$objects".bridge()] = objectsArray
+        
+        let topDict = NSMutableDictionary()
+        _rootDict["$top".bridge()] = topDict
+        
+        _rootDict["$version".bridge()] = 100000._bridgeToObjectiveC()
+
+        super.init()
     }
     
     public weak var delegate: NSKeyedArchiverDelegate?
     public var outputFormat: NSPropertyListFormat
     
     public func finishEncoding() {
-        NSUnimplemented()
+        let data = CFPropertyListCreateData(nil, _rootDict, CFPropertyListFormat(rawValue: CFIndex(outputFormat.rawValue))!, 0, nil)
+        _data.setData(data._nsObject)
     }
     
     public class func setClassName(codedName: String?, forClass cls: AnyClass) {
-        NSUnimplemented()
+        classTranslationTable[unsafeBitCast(cls, UnsafePointer<Void>.self)] = codedName
     }
     
     public func setClassName(codedName: String?, forClass cls: AnyClass) {
-        NSUnimplemented()
+        classTranslationTable[unsafeBitCast(cls, UnsafePointer<Void>.self)] = codedName
     }
     
     // During encoding, the coder first checks with the coder's
     // own table, then if there was no mapping there, the class's.
     
     public class func classNameForClass(cls: AnyClass) -> String? {
-        NSUnimplemented()
+        if let name = classTranslationTable[unsafeBitCast(cls, UnsafePointer<Void>.self)] {
+            return name
+        }
+        
+        return nil
     }
     
     public func classNameForClass(cls: AnyClass) -> String? {
-        NSUnimplemented()
+        if let name = classTranslationTable[unsafeBitCast(cls, UnsafePointer<Void>.self)] {
+            return name
+        } else if let name = NSKeyedArchiver.classTranslationTable[unsafeBitCast(cls, UnsafePointer<Void>.self)] {
+            return name
+        }
+        
+        return nil
     }
     
     public override func encodeObject(objv: AnyObject?, forKey key: String) {
@@ -61,39 +93,53 @@ public class NSKeyedArchiver : NSCoder {
     }
     
     public override func encodeBool(boolv: Bool, forKey key: String) {
-        NSUnimplemented()
+        let cfBool = boolv ? kCFBooleanTrue : kCFBooleanFalse
+        encodePlistObject(cfBool, forKey: key)
+    }
+    
+    public override func encodeInteger(intv: Int, forKey key: String) {
+        encodePlistObject(intv._bridgeToObjectiveC(), forKey: key)
     }
     
     public override func encodeInt(intv: Int32, forKey key: String) {
-        NSUnimplemented()
+        encodeInteger(Int(intv), forKey: key)
     }
     
     public override func encodeInt32(intv: Int32, forKey key: String) {
-        NSUnimplemented()
+        encodeInteger(Int(intv), forKey: key)
     }
     
     public override func encodeInt64(intv: Int64, forKey key: String) {
-        NSUnimplemented()
+        encodeInteger(Int(intv), forKey: key)
     }
     
     public override func encodeFloat(realv: Float, forKey key: String) {
-        NSUnimplemented()
+        encodeDouble(Double(realv), forKey: key)
     }
     
     public override func encodeDouble(realv: Double, forKey key: String) {
-        NSUnimplemented()
+        encodePlistObject(realv._bridgeToObjectiveC(), forKey: key)
     }
     
     public override func encodeBytes(bytesp: UnsafePointer<UInt8>, length lenv: Int, forKey key: String) {
-        NSUnimplemented()
+        let data = NSData(bytes: bytesp, length: lenv)
+        encodePlistObject(data, forKey: key)
     }
     
+    private func encodePlistObject(obj: AnyObject, forKey key: String) {
+        var topDict = _rootDict["$top".bridge()] as! [String: AnyObject]
+        topDict[key.bridge()] = obj
+        _rootDict["$top".bridge()] = topDict
+    }
     // Enables secure coding support on this keyed archiver. You do not need to enable secure coding on the archiver to enable secure coding on the unarchiver. Enabling secure coding on the archiver is a way for you to be sure that all classes that are encoded conform with NSSecureCoding (it will throw an exception if a class which does not NSSecureCoding is archived). Note that the getter is on the superclass, NSCoder. See NSCoder for more information about secure coding.
     public override var requiresSecureCoding: Bool {
         get {
             return false
         }
     }
+    
+    private var classTranslationTable: [UnsafePointer<Void> : String] = [:]
+    private static var classTranslationTable: [UnsafePointer<Void> : String] = [:]
 }
 
 public class NSKeyedUnarchiver : NSCoder {
@@ -321,4 +367,10 @@ extension NSObject {
     }
 }
 
+private func createUnmanagedCFTypeFromString(string: String) -> Unmanaged<CFTypeRef> {
+    return Unmanaged<CFTypeRef>.passRetained(string._cfObject)
+}
 
+private func getUnsafePointerFromUnmanaged<T>(unmanaged: Unmanaged<T>) -> UnsafePointer<Void> {
+    return UnsafePointer<Void>(unmanaged.toOpaque())
+}

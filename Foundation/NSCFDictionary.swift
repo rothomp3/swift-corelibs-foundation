@@ -134,11 +134,16 @@ internal func _CFSwiftDictionaryContainsValue(dictionary: AnyObject, value: AnyO
     NSUnimplemented()
 }
 
-internal func _CFSwiftDictionaryGetKeysAndValues(dictionary: AnyObject, keybuf: UnsafeMutablePointer<Unmanaged<AnyObject>?>, valuebuf: UnsafeMutablePointer<Unmanaged<AnyObject>?>) {
+internal func _CFSwiftDictionaryGetKeysAndValues(dictionary: AnyObject, valuebuf: UnsafeMutablePointer<Unmanaged<AnyObject>?>, keybuf: UnsafeMutablePointer<Unmanaged<AnyObject>?>) {
     var idx = 0
     (dictionary as! NSDictionary).enumerateKeysAndObjectsUsingBlock { key, value, _ in
-        keybuf[idx] = Unmanaged<AnyObject>.passUnretained(key)
-        valuebuf[idx] = Unmanaged<AnyObject>.passUnretained(value)
+        if keybuf != nil {
+            keybuf[idx] = Unmanaged<AnyObject>.passUnretained(key)
+        }
+        
+        if valuebuf != nil {
+            valuebuf[idx] = Unmanaged<AnyObject>.passUnretained(value)
+        }
         idx++
     }
 }

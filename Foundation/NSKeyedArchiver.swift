@@ -127,9 +127,9 @@ public class NSKeyedArchiver : NSCoder {
     }
     
     private func encodePlistObject(obj: AnyObject, forKey key: String) {
-        var topDict = _rootDict["$top".bridge()] as! [NSString: AnyObject]
+        var topDict = _rootDict["$top".bridge()] as! NSMutableDictionary
         topDict[key.bridge()] = obj
-        _rootDict["$top".bridge()] = topDict._bridgeToObject()
+        _rootDict["$top".bridge()] = topDict
     }
     // Enables secure coding support on this keyed archiver. You do not need to enable secure coding on the archiver to enable secure coding on the unarchiver. Enabling secure coding on the archiver is a way for you to be sure that all classes that are encoded conform with NSSecureCoding (it will throw an exception if a class which does not NSSecureCoding is archived). Note that the getter is on the superclass, NSCoder. See NSCoder for more information about secure coding.
     public override var requiresSecureCoding: Bool {

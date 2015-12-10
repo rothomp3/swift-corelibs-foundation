@@ -35,11 +35,6 @@ class TestNSKeyedArchiver: XCTestCase {
         let archiver = NSKeyedArchiver(forWritingWithMutableData: data)
         archiver.outputFormat = .XMLFormat_v1_0
         
-        let dict = archiver._rootDict
-        for (key, value) in dict {
-            print("\(key): \(value)")
-        }
-        
         archiver.encodeBytes("Hello there", length: 12, forKey: "theAnswer")
         archiver.finishEncoding()
         

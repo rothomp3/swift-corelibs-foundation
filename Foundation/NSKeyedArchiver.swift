@@ -19,7 +19,7 @@ public class NSKeyedArchiver : NSCoder {
     
     private let _data: NSMutableData
     
-    internal var _rootDict: [String : AnyObject]
+    internal var _rootDict: [NSString : AnyObject]
     
     public class func archivedDataWithRootObject(rootObject: AnyObject) -> NSData {
         NSUnimplemented()
@@ -42,7 +42,7 @@ public class NSKeyedArchiver : NSCoder {
         let topDict = NSMutableDictionary()
         _rootDict["$top".bridge()] = topDict
         
-        _rootDict["$version".bridge()] = 100000._bridgeToObjectiveC()
+        _rootDict["$version".bridge()] = 100000._nsObjectRepresentation()
 
         super.init()
     }
@@ -51,7 +51,7 @@ public class NSKeyedArchiver : NSCoder {
     public var outputFormat: NSPropertyListFormat
     
     public func finishEncoding() {
-        let data = CFPropertyListCreateData(nil, _rootDict, CFPropertyListFormat(rawValue: CFIndex(outputFormat.rawValue))!, 0, nil)
+        let data = CFPropertyListCreateData(nil, _rootDict._nsObject, CFPropertyListFormat(rawValue: CFIndex(outputFormat.rawValue))!, 0, nil)
         _data.setData(data._nsObject)
     }
     
@@ -98,7 +98,7 @@ public class NSKeyedArchiver : NSCoder {
     }
     
     public override func encodeInteger(intv: Int, forKey key: String) {
-        encodePlistObject(intv._bridgeToObjectiveC(), forKey: key)
+        encodePlistObject(intv._nsObjectRepresentation(), forKey: key)
     }
     
     public override func encodeInt(intv: Int32, forKey key: String) {
@@ -118,7 +118,7 @@ public class NSKeyedArchiver : NSCoder {
     }
     
     public override func encodeDouble(realv: Double, forKey key: String) {
-        encodePlistObject(realv._bridgeToObjectiveC(), forKey: key)
+        encodePlistObject(realv._nsObjectRepresentation(), forKey: key)
     }
     
     public override func encodeBytes(bytesp: UnsafePointer<UInt8>, length lenv: Int, forKey key: String) {
@@ -127,9 +127,9 @@ public class NSKeyedArchiver : NSCoder {
     }
     
     private func encodePlistObject(obj: AnyObject, forKey key: String) {
-        var topDict = _rootDict["$top".bridge()] as! [String: AnyObject]
+        var topDict = _rootDict["$top".bridge()] as! [NSString: AnyObject]
         topDict[key.bridge()] = obj
-        _rootDict["$top".bridge()] = topDict
+        _rootDict["$top".bridge()] = topDict._bridgeToObject()
     }
     // Enables secure coding support on this keyed archiver. You do not need to enable secure coding on the archiver to enable secure coding on the unarchiver. Enabling secure coding on the archiver is a way for you to be sure that all classes that are encoded conform with NSSecureCoding (it will throw an exception if a class which does not NSSecureCoding is archived). Note that the getter is on the superclass, NSCoder. See NSCoder for more information about secure coding.
     public override var requiresSecureCoding: Bool {

@@ -14,14 +14,13 @@ public let NSKeyedArchiveRootObjectKey: String = "root"
 
 public class NSKeyedArchiver : NSCoder {
     
-    private static var keyCallbacks = kCFTypeDictionaryKeyCallBacks
-    private static var valueCallbacks = kCFTypeDictionaryValueCallBacks
-    
     private let _data: NSMutableData
     
-    internal var _rootDict: [NSString : AnyObject]
+    internal var _rootDict: [String : AnyObject]
     
     public class func archivedDataWithRootObject(rootObject: AnyObject) -> NSData {
+        let data = NSMutableData()
+        let archiver = NSKeyedArchiver(forWritingWithMutableData: data)
         NSUnimplemented()
     }
     
@@ -34,15 +33,15 @@ public class NSKeyedArchiver : NSCoder {
         outputFormat = .BinaryFormat_v1_0
         _rootDict = [:]
         
-        _rootDict["$archiver".bridge()] = "\(self.dynamicType)".bridge()
+        _rootDict["$archiver"] = "\(self.dynamicType)"._bridgeToObject()
         let objectsArray = NSMutableArray()
-        objectsArray.addObject("$null".bridge())
-        _rootDict["$objects".bridge()] = objectsArray
+        objectsArray.addObject("$null"._bridgeToObject())
+        _rootDict["$objects"] = objectsArray
         
         let topDict = NSMutableDictionary()
-        _rootDict["$top".bridge()] = topDict
+        _rootDict["$top"] = topDict
         
-        _rootDict["$version".bridge()] = 100000._nsObjectRepresentation()
+        _rootDict["$version"] = 100000._nsObjectRepresentation()
 
         super.init()
     }
@@ -51,8 +50,12 @@ public class NSKeyedArchiver : NSCoder {
     public var outputFormat: NSPropertyListFormat
     
     public func finishEncoding() {
-        let data = CFPropertyListCreateData(nil, _rootDict._nsObject, CFPropertyListFormat(rawValue: CFIndex(outputFormat.rawValue))!, 0, nil)
-        _data.setData(data._nsObject)
+        do {
+            let data = try NSPropertyListSerialization.dataWithPropertyList(_rootDict.bridge(), format: outputFormat, options: 0)
+            _data.setData(data)
+        } catch {
+            // do nothing, no reason to crash here, `_data` will just remain empty
+        }
     }
     
     public class func setClassName(codedName: String?, forClass cls: AnyClass) {
@@ -127,9 +130,9 @@ public class NSKeyedArchiver : NSCoder {
     }
     
     private func encodePlistObject(obj: AnyObject, forKey key: String) {
-        var topDict = _rootDict["$top".bridge()] as! NSMutableDictionary
-        topDict[key.bridge()] = obj
-        _rootDict["$top".bridge()] = topDict
+        let topDict = _rootDict["$top"] as! NSMutableDictionary
+        topDict[key._bridgeToObject()] = obj
+        _rootDict["$top"] = topDict
     }
     // Enables secure coding support on this keyed archiver. You do not need to enable secure coding on the archiver to enable secure coding on the unarchiver. Enabling secure coding on the archiver is a way for you to be sure that all classes that are encoded conform with NSSecureCoding (it will throw an exception if a class which does not NSSecureCoding is archived). Note that the getter is on the superclass, NSCoder. See NSCoder for more information about secure coding.
     public override var requiresSecureCoding: Bool {

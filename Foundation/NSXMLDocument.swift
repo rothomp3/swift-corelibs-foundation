@@ -7,7 +7,7 @@
 // See http://swift.org/CONTRIBUTORS.txt for the list of Swift project authors
 //
 
-
+import libxml2
 // Input options
 //  NSXMLNodeOptionsNone
 //  NSXMLNodePreserveAll
@@ -53,7 +53,11 @@ public enum NSXMLDocumentContentKind : UInt {
 	@discussion Note: if the application of a method would result in more than one element in the children array, an exception is thrown. Trying to add a document, namespace, attribute, or node with a parent also throws an exception. To add a node with a parent first detach or create a copy of it.
 */
 public class NSXMLDocument : NSXMLNode {
-    
+    private var _xmlDoc: xmlDocPtr {
+        get {
+            return xmlDocPtr(_xmlNode)
+        }
+    }
     /*!
         @method initWithXMLString:options:error:
         @abstract Returns a document created from either XML or HTML, if the HTMLTidy option is set. Parse errors are returned in <tt>error</tt>.
@@ -76,7 +80,13 @@ public class NSXMLDocument : NSXMLNode {
         @method initWithRootElement:
         @abstract Returns a document with a single child, the root element.
     */
-    public init(rootElement element: NSXMLElement?) { NSUnimplemented() }
+    public init(rootElement element: NSXMLElement?) {
+        super.init(kind: .DocumentKind, options: NSXMLNodeOptionsNone)
+        if let element = element {
+            let newNode = xmlDocCopyNode(element._xmlNode, _xmlDoc, 1)
+            xmlDocSetRootElement(_xmlDoc, newNode)
+        }
+    }
     
     public class func replacementClassForClass(cls: AnyClass) -> AnyClass { NSUnimplemented() }
     
@@ -84,25 +94,68 @@ public class NSXMLDocument : NSXMLNode {
         @method characterEncoding
         @abstract Sets the character encoding to an IANA type.
     */
-    public var characterEncoding: String? { NSUnimplemented() } //primitive
+    public var characterEncoding: String? {
+        get {
+            return String.fromCString(UnsafePointer<CChar>(_xmlDoc.memory.encoding))
+        }
+        set {
+            if _xmlDoc.memory.encoding != nil {
+                xmlFree(UnsafeMutablePointer<xmlChar>(_xmlDoc.memory.encoding))
+            }
+            if let encoding = newValue {
+                _xmlDoc.memory.encoding = encoding._xmlString
+            } else {
+                _xmlDoc.memory.encoding = nil
+            }
+        }
+    } //primitive
     
     /*!
         @method version
         @abstract Sets the XML version. Should be 1.0 or 1.1.
     */
-    public var version: String? { NSUnimplemented() } //primitive
+    public var version: String? {
+        get {
+            return String.fromCString(UnsafePointer<CChar>(_xmlDoc.memory.version))
+        }
+        set {
+            newValue?.withCString {
+                ptr -> Void in
+                memcpy(UnsafeMutablePointer<Void>(_xmlDoc.memory.version), ptr, 3)
+            }
+        }
+    } //primitive
     
     /*!
         @method standalone
         @abstract Set whether this document depends on an external DTD. If this option is set the standalone declaration will appear on output.
     */
-    public var standalone: Bool //primitive
+    public var standalone: Bool {
+        get {
+            return _xmlDoc.memory.standalone != 0
+        }
+        set {
+            if newValue {
+                _xmlDoc.memory.standalone = 1
+            } else {
+                _xmlDoc.memory.standalone = 0
+            }
+        }
+    }//primitive
     
     /*!
         @method documentContentKind
         @abstract The kind of document.
     */
-    public var documentContentKind: NSXMLDocumentContentKind //primitive
+    public var documentContentKind: NSXMLDocumentContentKind  {
+        get {
+            return .XMLKind
+        }
+        
+        set {
+            
+        }
+    }//primitive
     
     /*!
         @method MIMEType
@@ -120,13 +173,29 @@ public class NSXMLDocument : NSXMLNode {
         @method setRootElement:
         @abstract Set the root element. Removes all other children including comments and processing-instructions.
     */
-    public func setRootElement(root: NSXMLElement) { NSUnimplemented() }
+    public func setRootElement(root: NSXMLElement) {
+        precondition(root.parent == nil)
+        
+        for child in _childNodes {
+            child.detach()
+        }
+        
+        xmlDocSetRootElement(_xmlDoc, root._xmlNode)
+        _childNodes.append(root)
+    }
     
     /*!
         @method rootElement
         @abstract The root element.
     */
-    public func rootElement() -> NSXMLElement? { NSUnimplemented() } //primitive
+    public func rootElement() -> NSXMLElement? {
+        let rootPtr = xmlDocGetRootElement(_xmlDoc)
+        if rootPtr == nil {
+            return nil
+        }
+        
+        return NSXMLNode._objectNodeForNode(rootPtr) as? NSXMLElement
+    } //primitive
     
     /*!
         @method insertChild:atIndex:
@@ -156,7 +225,10 @@ public class NSXMLDocument : NSXMLNode {
         @method addChild:
         @abstract Adds a child to the end of the existing children.
     */
-    public func addChild(child: NSXMLNode) { NSUnimplemented() }
+    public func addChild(child: NSXMLNode) {
+        xmlAddChild(_xmlNode, child._xmlNode)
+        _childNodes.append(child)
+    }
     
     /*!
         @method replaceChildAtIndex:withNode:
@@ -195,5 +267,32 @@ public class NSXMLDocument : NSXMLNode {
     public func objectByApplyingXSLTAtURL(xsltURL: NSURL, arguments argument: [String : String]?) throws -> AnyObject { NSUnimplemented() }
     
     public func validate() throws { NSUnimplemented() }
+    
+    internal override class func _objectNodeForNode(node: xmlNodePtr) -> NSXMLDocument {
+        precondition(node.memory.type == XML_DOCUMENT_NODE)
+        
+        if node.memory._private != nil {
+            let unmanaged = Unmanaged<NSXMLDocument>.fromOpaque(node.memory._private)
+            return unmanaged.takeUnretainedValue()
+        }
+        
+        return NSXMLDocument(ptr: node)
+    }
+    
+    internal override init(ptr: xmlNodePtr) {
+        super.init(ptr: ptr)
+    }
+}
+
+internal extension String {
+    internal var _xmlString: UnsafePointer<xmlChar> {
+        return self.withCString {
+            (ptr: UnsafePointer<CChar>) -> UnsafePointer<xmlChar> in
+            let length = self.utf8.count + 1
+            let result = UnsafeMutablePointer<CChar>.alloc(length)
+            strncpy(result, ptr, length)
+            return UnsafePointer<xmlChar>(result)
+        }
+    }
 }
 

@@ -7,7 +7,7 @@
 // See http://swift.org/CONTRIBUTORS.txt for the list of Swift project authors
 //
 
-
+import libxml2
 /*!
     @class NSXMLElement
     @abstract An XML element
@@ -19,13 +19,19 @@ public class NSXMLElement : NSXMLNode {
         @method initWithName:
         @abstract Returns an element <tt>&lt;name>&lt;/name></tt>.
     */
-    public convenience init(name: String) { NSUnimplemented() }
+    public convenience init(name: String) {
+        self.init(name: name, URI: nil)
+    }
     
     /*!
         @method initWithName:URI:
         @abstract Returns an element whose full QName is specified.
     */
-    public init(name: String, URI: String?) { NSUnimplemented() } //primitive
+    public init(name: String, URI: String?) {
+        super.init(kind: .ElementKind, options: 0)
+        self.URI = URI
+        self.name = name
+    } //primitive
     
     /*!
         @method initWithName:stringValue:
@@ -39,7 +45,9 @@ public class NSXMLElement : NSXMLNode {
     */
     public init(XMLString string: String) throws { NSUnimplemented() }
     
-    public convenience override init(kind: NSXMLNodeKind, options: Int) { NSUnimplemented() }
+    public convenience override init(kind: NSXMLNodeKind, options: Int) {
+        self.init(name: "", URI: nil)
+    }
     
     /*!
         @method elementsForName:
@@ -153,7 +161,12 @@ public class NSXMLElement : NSXMLNode {
         @method addChild:
         @abstract Adds a child to the end of the existing children.
     */
-    public func addChild(child: NSXMLNode) { NSUnimplemented() }
+    public func addChild(child: NSXMLNode) {
+        precondition(child.parent == nil)
+        
+        xmlAddChild(_xmlNode, child._xmlNode)
+        _childNodes.append(child)
+    }
     
     /*!
         @method replaceChildAtIndex:withNode:
@@ -166,6 +179,21 @@ public class NSXMLElement : NSXMLNode {
         @abstract Adjacent text nodes are coalesced. If the node's value is the empty string, it is removed. This should be called with a value of NO before using XQuery or XPath.
     */
     public func normalizeAdjacentTextNodesPreservingCDATA(preserve: Bool) { NSUnimplemented() }
+    
+    internal override class func _objectNodeForNode(node: xmlNodePtr) -> NSXMLElement {
+        precondition(node.memory.type == XML_ELEMENT_NODE)
+        
+        if node.memory._private != nil {
+            let unmanaged = Unmanaged<NSXMLElement>.fromOpaque(node.memory._private)
+            return unmanaged.takeUnretainedValue()
+        }
+        
+        return NSXMLElement(ptr: node)
+    }
+    
+    internal override init(ptr: xmlNodePtr) {
+        super.init(ptr: ptr)
+    }
 }
 
 extension NSXMLElement {

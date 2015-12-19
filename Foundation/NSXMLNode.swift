@@ -54,7 +54,7 @@ public class NSXMLNode : NSObject, NSCopying {
     public override func copy() -> AnyObject {
         return copyWithZone(nil)
     }
-    
+
     internal let _xmlNode: xmlNodePtr
 
     public func copyWithZone(zone: NSZone) -> AnyObject {
@@ -82,6 +82,9 @@ public class NSXMLNode : NSObject, NSCopying {
 
         case .ElementKind:
             _xmlNode = xmlNewNode(nil, "")
+
+        case .AttributeKind:
+            _xmlNode = xmlNodePtr(xmlNewProp(nil, "", ""))
 
         default:
             _xmlNode = nil
@@ -132,7 +135,9 @@ public class NSXMLNode : NSObject, NSCopying {
         @method elementWithName:stringValue:
         @abstract Returns an element with a single text node child <tt>&lt;name>string&lt;/name></tt>.
     */
-    public class func elementWithName(name: String, stringValue string: String) -> AnyObject { NSUnimplemented() }
+    public class func elementWithName(name: String, stringValue string: String) -> AnyObject {
+        return NSXMLElement(name: name, stringValue: string)
+    }
 
     /*!
         @method elementWithName:children:attributes:
@@ -144,13 +149,22 @@ public class NSXMLNode : NSObject, NSCopying {
         @method attributeWithName:stringValue:
         @abstract Returns an attribute <tt>name="stringValue"</tt>.
     */
-    public class func attributeWithName(name: String, stringValue: String) -> AnyObject { NSUnimplemented() }
+    public class func attributeWithName(name: String, stringValue: String) -> AnyObject {
+        let attribute = xmlNewProp(nil, name, stringValue)
+
+        return NSXMLNode(ptr: xmlNodePtr(attribute))
+    }
 
     /*!
         @method attributeWithLocalName:URI:stringValue:
         @abstract Returns an attribute whose full QName is specified.
     */
-    public class func attributeWithName(name: String, URI: String, stringValue: String) -> AnyObject { NSUnimplemented() }
+    public class func attributeWithName(name: String, URI: String, stringValue: String) -> AnyObject {
+        let attribute = NSXMLNode.attributeWithName(name, stringValue: stringValue) as! NSXMLNode
+        attribute.URI = URI
+
+        return attribute
+    }
 
     /*!
         @method namespaceWithName:stringValue:
@@ -223,17 +237,60 @@ public class NSXMLNode : NSObject, NSCopying {
         }
     }
 
+    private var _objectValue: AnyObject? = nil
+
     /*!
         @method objectValue
         @abstract Sets the content of the node. Setting the objectValue removes all existing children including processing instructions and comments. Setting the object value on an element creates a single text node child.
     */
-    public var objectValue: AnyObject? //primitive
+    public var objectValue: AnyObject? {
+        get {
+            return _objectValue
+        }
+        set {
+            _objectValue = newValue
+            if let value = newValue {
+                stringValue = "\(value)"
+            } else {
+                stringValue = nil
+            }
+        }
+    }//primitive
 
     /*!
         @method stringValue:
         @abstract Sets the content of the node. Setting the stringValue removes all existing children including processing instructions and comments. Setting the string value on an element creates a single text node child. The getter returns the string value of the node, which may be either its content or child text nodes, depending on the type of node. Elements are recursed and text nodes concatenated in document order with no intervening spaces.
     */
-    public var stringValue: String? //primitive
+    public var stringValue: String? {
+        get {
+            if let value = _objectValue {
+                return "\(value)"
+            } else {
+                return nil
+            }
+        }
+        set {
+            _removeAllChildren() // in case anyone is holding a reference to any of these children we're about to destroy
+
+            if let string = newValue {
+                let newContent = xmlEncodeEntitiesReentrant(_xmlNode.memory.doc, string)
+                defer { xmlFree(newContent) }
+                xmlNodeSetContent(_xmlNode, newContent)
+            } else {
+                xmlNodeSetContent(_xmlNode, nil)
+            }
+
+            _objectValue = newValue?._bridgeToObject()
+        }
+    }
+
+    private func _removeAllChildren() {
+        for node in _childNodes {
+            xmlUnlinkNode(node._xmlNode)
+        }
+
+        _childNodes.removeAll()
+    }
 
     /*!
         @method setStringValue:resolvingEntities:

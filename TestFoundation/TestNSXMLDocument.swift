@@ -17,6 +17,7 @@
     import SwiftXCTest
 #endif
 
+import libxml2
 
 
 class TestNSXMLDocument : XCTestCase {
@@ -24,7 +25,11 @@ class TestNSXMLDocument : XCTestCase {
     var allTests: [(String, () -> Void)] {
         return [
             ("test_basicCreation", test_basicCreation),
-            ("test_xpath", test_xpath)
+            ("test_xpath", test_xpath),
+            ("test_elementCreation", test_elementCreation),
+            ("test_elementChildren", test_elementChildren),
+            ("test_stringValue", test_stringValue),
+            ("test_objectValue", test_objectValue)
         ]
     }
     
@@ -95,6 +100,45 @@ func test_xpath() {
     XCTAssertEqual(nodes[0], bar1)
     XCTAssertEqual(nodes[1], bar2)
     XCTAssertEqual(nodes[2], bar3)
+}
+
+func test_elementCreation() {
+    let element = NSXMLElement(name: "test", stringValue: "This is my value")
+    XCTAssertEqual(element.XMLString, "<test>This is my value</test>")
+    XCTAssertEqual(element.children?.count, 1)
+}
+
+func test_elementChildren() {
+    let element = NSXMLElement(name: "root")
+    let foo = NSXMLElement(name: "foo")
+    let bar = NSXMLElement(name: "bar")
+    let bar2 = bar.copy() as! NSXMLElement
+    
+    element.addChild(foo)
+    element.addChild(bar)
+    element.addChild(bar2)
+    
+    XCTAssertEqual(element.elementsForName("bar"), [bar, bar2])
+    XCTAssertFalse(element.elementsForName("foo").contains(bar))
+    XCTAssertFalse(element.elementsForName("foo").contains(bar2))
+}
+
+func test_stringValue() {
+    let element = NSXMLElement(name: "root")
+    let foo = NSXMLElement(name: "foo")
+    element.addChild(foo)
+    
+    element.stringValue = "Hello!<evil/>"
+    XCTAssertEqual(element.XMLString, "<root>Hello!&lt;evil/&gt;</root>")
+    XCTAssertEqual(element.stringValue, "Hello!<evil/>", element.stringValue ?? "stringValue unexpectedly nil")
+}
+
+func test_objectValue() {
+    let element = NSXMLElement(name: "root")
+    let dict: [String: AnyObject] = ["hello": "world"._bridgeToObject(), "value": 42._bridgeToObject()]
+    element.objectValue = dict._bridgeToObject()
+    
+    XCTAssertEqual(element.XMLString, "", element.XMLString)
 }
 
 func contents(ptr: UnsafePointer<Void>, _ length: Int) -> String {

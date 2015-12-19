@@ -37,7 +37,13 @@ public class NSXMLElement : NSXMLNode {
         @method initWithName:stringValue:
         @abstract Returns an element with a single text node child <tt>&lt;name>string&lt;/name></tt>.
     */
-    public convenience init(name: String, stringValue string: String?) { NSUnimplemented() }
+    public convenience init(name: String, stringValue string: String?) {
+        self.init(name: name, URI: nil)
+        if let string = string {
+            let child = xmlNewText(string)
+            xmlAddChild(_xmlNode, child)
+        }
+    }
     
     /*!
         @method initWithXMLString:error:
@@ -53,7 +59,9 @@ public class NSXMLElement : NSXMLNode {
         @method elementsForName:
         @abstract Returns all of the child elements that match this name.
     */
-    public func elementsForName(name: String) -> [NSXMLElement] { NSUnimplemented() }
+    public func elementsForName(name: String) -> [NSXMLElement] {
+        return self.filter({ $0._xmlNode.memory.type == XML_ELEMENT_NODE }).filter({ $0.name == name }).flatMap({ $0 as? NSXMLElement })
+    }
     
     /*!
         @method elementsForLocalName:URI
@@ -77,7 +85,15 @@ public class NSXMLElement : NSXMLNode {
         @method setAttributes
         @abstract Set the attributes. In the case of duplicate names, the first attribute with the name is used.
     */
-    public var attributes: [NSXMLNode]?
+    public var attributes: [NSXMLNode]? {
+        get {
+            return nil
+        }
+        
+        set {
+            
+        }
+    }
     
     /*!
      @method setAttributesWithDictionary:

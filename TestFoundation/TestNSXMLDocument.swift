@@ -74,7 +74,6 @@ class TestNSXMLDocument : XCTestCase {
         print(barNode.prefix)
         print(fooNode.prefix)
     }
-<<<<<<< HEAD
 
     func test_xpath() {
         let doc = NSXMLDocument(rootElement: nil)

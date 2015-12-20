@@ -135,10 +135,10 @@ func test_stringValue() {
 
 func test_objectValue() {
     let element = NSXMLElement(name: "root")
-    let dict: [String: AnyObject] = ["hello": "world"._bridgeToObject(), "value": 42._bridgeToObject()]
+    let dict: [String: AnyObject] = ["hello": "world"._bridgeToObject()]
     element.objectValue = dict._bridgeToObject()
     
-    XCTAssertEqual(element.XMLString, "", element.XMLString)
+    XCTAssertEqual(element.XMLString, "<root>{\n    hello = world;\n}</root>", element.XMLString)
 }
 
 func contents(ptr: UnsafePointer<Void>, _ length: Int) -> String {

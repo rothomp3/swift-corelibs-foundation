@@ -73,7 +73,10 @@ public class NSXMLElement : NSXMLNode {
         @method addAttribute:
         @abstract Adds an attribute. Attributes with duplicate names are not added.
     */
-    public func addAttribute(attribute: NSXMLNode) { NSUnimplemented() } //primitive
+    public func addAttribute(attribute: NSXMLNode) {
+        guard xmlHasProp(_xmlNode, attribute._xmlNode.memory.name) == nil else { return }
+        addChild(attribute)
+    } //primitive
     
     /*!
         @method removeAttributeForName:

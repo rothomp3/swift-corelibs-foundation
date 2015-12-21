@@ -245,7 +245,11 @@ public class NSXMLNode : NSObject, NSCopying {
     */
     public var objectValue: AnyObject? {
         get {
-            return _objectValue
+            if let value = _objectValue {
+                return value
+            } else {
+                return stringValue?._bridgeToObject()
+            }
         }
         set {
             _objectValue = newValue
@@ -263,11 +267,9 @@ public class NSXMLNode : NSObject, NSCopying {
     */
     public var stringValue: String? {
         get {
-            if let value = _objectValue {
-                return "\(value)"
-            } else {
-                return nil
-            }
+            let content = xmlNodeGetContent(_xmlNode)
+            defer { xmlFree(content) }
+            return String.fromCString(UnsafePointer<CChar>(content))
         }
         set {
             _removeAllChildren() // in case anyone is holding a reference to any of these children we're about to destroy
@@ -279,8 +281,6 @@ public class NSXMLNode : NSObject, NSCopying {
             } else {
                 xmlNodeSetContent(_xmlNode, nil)
             }
-
-            _objectValue = newValue?._bridgeToObject()
         }
     }
 

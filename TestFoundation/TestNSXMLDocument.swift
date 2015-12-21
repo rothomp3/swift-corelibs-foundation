@@ -152,13 +152,30 @@ func test_attributes() {
     
     element.addAttribute(attribute)
     
+    let otherAttribute = NSXMLNode.attributeWithName("foo", stringValue: "bar") as! NSXMLNode
+    element.addAttribute(otherAttribute)
+    
     guard let attributes = element.attributes else {
         XCTFail()
         return
     }
     
-    XCTAssertEqual(attributes.count, 1)
+    XCTAssertEqual(attributes.count, 2)
     XCTAssertEqual(attributes.first, attribute)
+    XCTAssertEqual(attributes.last, otherAttribute)
+    
+    let barAttribute = NSXMLNode.attributeWithName("bar", stringValue: "buz") as! NSXMLNode
+    let bazAttribute = NSXMLNode.attributeWithName("baz", stringValue: "fiz") as! NSXMLNode
+    
+    element.attributes = [barAttribute, bazAttribute]
+    
+    XCTAssertEqual(element.attributes?.count, 2)
+    XCTAssertEqual(element.attributes?.first, barAttribute)
+    XCTAssertEqual(element.attributes?.last, bazAttribute)
+    
+    element.setAttributesWithDictionary(["hello": "world", "foobar": "buzbaz"])
+    XCTAssertEqual(element.attributeForName("hello")?.stringValue, "world", "\(element.attributeForName("hello")?.stringValue)")
+    XCTAssertEqual(element.attributeForName("foobar")?.stringValue, "buzbaz", "\(element.attributes ?? [])")
 }
 
 func contents(ptr: UnsafePointer<Void>, _ length: Int) -> String {

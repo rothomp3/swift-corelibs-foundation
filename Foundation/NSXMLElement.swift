@@ -98,16 +98,48 @@ public class NSXMLElement : NSXMLNode {
     */
     public var attributes: [NSXMLNode]? {
         get {
-            let result = self.filter({ $0._xmlNode.memory.type == XML_ATTRIBUTE_NODE })
-            if result.count <= 0 {
-                return nil
+            var result: [NSXMLNode] = []
+            var attribute = _xmlNode.memory.properties
+            while attribute != nil {
+                result.append(NSXMLNode._objectNodeForNode(xmlNodePtr(attribute)))
+                attribute = attribute.memory.next
             }
             
-            return result
+            return result.count > 0 ? result : nil // This appears to be how Darwin does it
         }
         
         set {
+            removeAttributes()
             
+            guard let attributes = newValue else {
+                return
+            }
+            
+            for attribute in attributes {
+                addAttribute(attribute)
+            }
+        }
+    }
+    
+    private func removeAttributes() {
+        var attribute = _xmlNode.memory.properties
+        while attribute != nil {
+            var shouldFreeNode = true
+            if attribute.memory._private != nil {
+                let nodeUnmanagedRef = Unmanaged<NSXMLNode>.fromOpaque(attribute.memory._private)
+                let node = nodeUnmanagedRef.takeUnretainedValue()
+                _childNodes.remove(node)
+
+                shouldFreeNode = false
+            }
+            
+            let temp = attribute.memory.next
+            xmlUnlinkNode(xmlNodePtr(attribute))
+            if shouldFreeNode {
+                xmlFreeNode(xmlNodePtr(attribute))
+            }
+            
+            attribute = temp
         }
     }
     
@@ -115,13 +147,21 @@ public class NSXMLElement : NSXMLNode {
      @method setAttributesWithDictionary:
      @abstract Set the attributes based on a name-value dictionary.
      */
-    public func setAttributesWithDictionary(attributes: [String : String]) { NSUnimplemented() }
+    public func setAttributesWithDictionary(attributes: [String : String]) {
+        removeAttributes()
+        for (name, value) in attributes {
+            addAttribute(NSXMLNode.attributeWithName(name, stringValue: value) as! NSXMLNode)
+        }
+    }
     
     /*!
         @method attributeForName:
         @abstract Returns an attribute matching this name.
     */
-    public func attributeForName(name: String) -> NSXMLNode? { NSUnimplemented() }
+    public func attributeForName(name: String) -> NSXMLNode? {
+        let attribute = xmlHasProp(_xmlNode, name)
+        return NSXMLNode._objectNodeForNode(xmlNodePtr(attribute))
+    }
     
     /*!
         @method attributeForLocalName:URI:

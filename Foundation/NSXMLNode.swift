@@ -316,7 +316,7 @@ public class NSXMLNode : NSObject, NSCopying {
         }
         _childNodes.removeAll(keepCapacity: true)
     }
-    
+
     /*!
         @method setStringValue:resolvingEntities:
         @abstract Sets the content as with @link setStringValue: @/link, but when "resolve" is true, character references, predefined entities and user entities available in the document's dtd are resolved. Entities not available in the dtd remain in their entity form.

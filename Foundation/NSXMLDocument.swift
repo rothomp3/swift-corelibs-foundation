@@ -181,7 +181,7 @@ public class NSXMLDocument : NSXMLNode {
         }
         
         xmlDocSetRootElement(_xmlDoc, root._xmlNode)
-        _childNodes.append(root)
+        _childNodes.insert(root)
     }
     
     /*!
@@ -227,7 +227,7 @@ public class NSXMLDocument : NSXMLNode {
     */
     public func addChild(child: NSXMLNode) {
         xmlAddChild(_xmlNode, child._xmlNode)
-        _childNodes.append(child)
+        _childNodes.insert(child)
     }
     
     /*!

@@ -82,7 +82,15 @@ public class NSXMLElement : NSXMLNode {
         @method removeAttributeForName:
         @abstract Removes an attribute based on its name.
     */
-    public func removeAttributeForName(name: String) { NSUnimplemented() } //primitive
+    public func removeAttributeForName(name: String) {
+        let prop = xmlHasProp(_xmlNode, name)
+        if prop != nil {
+            let propNode = NSXMLNode._objectNodeForNode(xmlNodePtr(prop))
+            _childNodes.remove(propNode)
+            // We can't use `xmlRemoveProp` because someone else may still have a reference to this attribute
+            xmlUnlinkNode(xmlNodePtr(prop))
+        }
+    } //primitive
     
     /*!
         @method setAttributes
@@ -90,7 +98,12 @@ public class NSXMLElement : NSXMLNode {
     */
     public var attributes: [NSXMLNode]? {
         get {
-            return nil
+            let result = self.filter({ $0._xmlNode.memory.type == XML_ATTRIBUTE_NODE })
+            if result.count <= 0 {
+                return nil
+            }
+            
+            return result
         }
         
         set {
@@ -184,7 +197,7 @@ public class NSXMLElement : NSXMLNode {
         precondition(child.parent == nil)
         
         xmlAddChild(_xmlNode, child._xmlNode)
-        _childNodes.append(child)
+        _childNodes.insert(child)
     }
     
     /*!

@@ -29,7 +29,8 @@ class TestNSXMLDocument : XCTestCase {
             ("test_elementCreation", test_elementCreation),
             ("test_elementChildren", test_elementChildren),
             ("test_stringValue", test_stringValue),
-            ("test_objectValue", test_objectValue)
+            ("test_objectValue", test_objectValue),
+            ("test_attributes", test_attributes)
         ]
     }
     
@@ -139,6 +140,25 @@ func test_objectValue() {
     element.objectValue = dict._bridgeToObject()
     
     XCTAssertEqual(element.XMLString, "<root>{\n    hello = world;\n}</root>", element.XMLString)
+}
+
+func test_attributes() {
+    let element = NSXMLElement(name: "root")
+    let attribute = NSXMLNode.attributeWithName("color", stringValue: "#ff00ff") as! NSXMLNode
+    element.addAttribute(attribute)
+    XCTAssertEqual(element.XMLString, "<root color=\"#ff00ff\"/>", element.XMLString)
+    element.removeAttributeForName("color")
+    XCTAssertEqual(element.XMLString, "<root/>")
+    
+    element.addAttribute(attribute)
+    
+    guard let attributes = element.attributes else {
+        XCTFail()
+        return
+    }
+    
+    XCTAssertEqual(attributes.count, 1)
+    XCTAssertEqual(attributes.first, attribute)
 }
 
 func contents(ptr: UnsafePointer<Void>, _ length: Int) -> String {

@@ -448,9 +448,7 @@ public class NSXMLNode : NSObject, NSCopying {
         let parentNodePtr = parentPtr.memory._private
         guard parentNodePtr != nil else { return }
         let parent = Unmanaged<NSXMLNode>.fromOpaque(parentNodePtr).takeUnretainedValue()
-        if let index = parent._childNodes.indexOf(self) {
-            parent._childNodes.removeAtIndex(index)
-        }
+        parent._childNodes.remove(self)
     } //primitive
 
     /*!
@@ -691,7 +689,7 @@ public class NSXMLNode : NSObject, NSCopying {
 
     public func objectsForXQuery(xquery: String) throws -> [AnyObject] { NSUnimplemented() }
 
-    internal var _childNodes: [NSXMLNode] = []
+    internal var _childNodes: Set<NSXMLNode> = []
 
     deinit {
         for node in _childNodes {
@@ -715,7 +713,7 @@ public class NSXMLNode : NSObject, NSCopying {
         let parent = _xmlNode.memory.parent
         if parent != nil {
             let parentNode = NSXMLNode._objectNodeForNode(parent)
-            parentNode._childNodes.append(self)
+            parentNode._childNodes.insert(self)
         }
 
         let unmanaged = Unmanaged<NSXMLNode>.passUnretained(self)

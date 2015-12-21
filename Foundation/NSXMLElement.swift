@@ -104,7 +104,6 @@ public class NSXMLElement : NSXMLNode {
                 result.append(NSXMLNode._objectNodeForNode(xmlNodePtr(attribute)))
                 attribute = attribute.memory.next
             }
-
             return result.count > 0 ? result : nil // This appears to be how Darwin does it
         }
 
@@ -162,7 +161,7 @@ public class NSXMLElement : NSXMLNode {
         let attribute = xmlHasProp(_xmlNode, name)
         return NSXMLNode._objectNodeForNode(xmlNodePtr(attribute))
     }
-
+<
     /*!
         @method attributeForLocalName:URI:
         @abstract Returns an attribute matching this localname URI pair.

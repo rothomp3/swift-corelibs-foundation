@@ -378,7 +378,15 @@ public class NSXMLNode : NSObject, NSCopying {
         @abstract Returns the child node at a particular index.
     */
     public func childAtIndex(index: Int) -> NSXMLNode? {
-        return children?[index]
+        precondition(index >= 0)
+        precondition(index < childCount)
+        
+        var nodeIndex = startIndex
+        for _ in 0..<index {
+            nodeIndex = nodeIndex.successor()
+        }
+        
+        return self[nodeIndex]
     } //primitive
 
     /*!

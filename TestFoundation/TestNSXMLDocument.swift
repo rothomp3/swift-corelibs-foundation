@@ -122,6 +122,18 @@ func test_elementChildren() {
     XCTAssertEqual(element.elementsForName("bar"), [bar, bar2])
     XCTAssertFalse(element.elementsForName("foo").contains(bar))
     XCTAssertFalse(element.elementsForName("foo").contains(bar2))
+    
+    let baz = NSXMLElement(name: "baz")
+    element.insertChild(baz, atIndex: 2)
+    XCTAssertEqual(element.children?[2], baz)
+    
+    foo.detach()
+    bar.detach()
+    
+    element.insertChildren([foo, bar], atIndex: 1)
+    XCTAssertEqual(element.children?[1], foo)
+    XCTAssertEqual(element.children?[2], bar)
+    XCTAssertEqual(element.children?[0], baz, "\(element.children?[0])")
 }
 
 func test_stringValue() {

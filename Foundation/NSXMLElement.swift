@@ -209,19 +209,45 @@ public class NSXMLElement : NSXMLNode {
         @method insertChild:atIndex:
         @abstract Inserts a child at a particular index.
     */
-    public func insertChild(child: NSXMLNode, atIndex index: Int) { NSUnimplemented() } //primitive
+    public func insertChild(child: NSXMLNode, atIndex index: Int) {
+        precondition(index >= 0)
+        precondition(index <= childCount)
+        precondition(child.parent == nil)
+        
+        _childNodes.insert(child)
+        
+        if index == 0 {
+            let first = _xmlNode.memory.children
+            xmlAddPrevSibling(first, child._xmlNode)
+        } else {
+            let currChild = childAtIndex(index - 1)!._xmlNode
+            xmlAddNextSibling(currChild, child._xmlNode)
+        }
+    
+    } //primitive
     
     /*!
         @method insertChildren:atIndex:
         @abstract Insert several children at a particular index.
     */
-    public func insertChildren(children: [NSXMLNode], atIndex index: Int) { NSUnimplemented() }
+    public func insertChildren(children: [NSXMLNode], atIndex index: Int) {
+        for (childIndex, node) in children.enumerate() {
+            insertChild(node, atIndex: index + childIndex)
+        }
+    }
     
     /*!
         @method removeChildAtIndex:atIndex:
         @abstract Removes a child at a particular index.
     */
-    public func removeChildAtIndex(index: Int) { NSUnimplemented() } //primitive
+    public func removeChildAtIndex(index: Int) {
+        guard let child = childAtIndex(index) else {
+            fatalError("index out of bounds")
+        }
+        
+        _childNodes.remove(child)
+        xmlUnlinkNode(child._xmlNode)
+    } //primitive
     
     /*!
         @method setChildren:
@@ -244,7 +270,12 @@ public class NSXMLElement : NSXMLNode {
         @method replaceChildAtIndex:withNode:
         @abstract Replaces a child at a particular index with another child.
     */
-    public func replaceChildAtIndex(index: Int, withNode node: NSXMLNode) { NSUnimplemented() }
+    public func replaceChildAtIndex(index: Int, withNode node: NSXMLNode) {
+        let child = childAtIndex(index)!
+        _childNodes.remove(child)
+        xmlReplaceNode(child._xmlNode, node._xmlNode)
+        _childNodes.insert(node)
+    }
     
     /*!
         @method normalizeAdjacentTextNodesPreservingCDATA:

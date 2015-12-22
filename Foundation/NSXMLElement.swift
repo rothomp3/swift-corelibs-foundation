@@ -253,7 +253,16 @@ public class NSXMLElement : NSXMLNode {
         @method setChildren:
         @abstract Removes all existing children and replaces them with the new children. Set children to nil to simply remove all children.
     */
-    public func setChildren(children: [NSXMLNode]?) { NSUnimplemented() } //primitive
+    public func setChildren(children: [NSXMLNode]?) {
+        _removeAllChildren()
+        guard let children = children else {
+            return
+        }
+        
+        for child in children {
+            addChild(child)
+        }        
+    } //primitive
     
     /*!
         @method addChild:

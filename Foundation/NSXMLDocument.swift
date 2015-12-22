@@ -81,10 +81,12 @@ public class NSXMLDocument : NSXMLNode {
         @abstract Returns a document with a single child, the root element.
     */
     public init(rootElement element: NSXMLElement?) {
+        precondition(element?.parent == nil)
+        
         super.init(kind: .DocumentKind, options: NSXMLNodeOptionsNone)
         if let element = element {
-            let newNode = xmlDocCopyNode(element._xmlNode, _xmlDoc, 1)
-            xmlDocSetRootElement(_xmlDoc, newNode)
+            xmlDocSetRootElement(_xmlDoc, element._xmlNode)
+            _childNodes.insert(element)
         }
     }
     

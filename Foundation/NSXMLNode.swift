@@ -143,7 +143,13 @@ public class NSXMLNode : NSObject, NSCopying {
         @method elementWithName:children:attributes:
         @abstract Returns an element children and attributes <tt>&lt;name attr1="foo" attr2="bar">&lt;-- child1 -->child2&lt;/name></tt>.
     */
-    public class func elementWithName(name: String, children: [NSXMLNode]?, attributes: [NSXMLNode]?) -> AnyObject { NSUnimplemented() }
+    public class func elementWithName(name: String, children: [NSXMLNode]?, attributes: [NSXMLNode]?) -> AnyObject {
+        let element = NSXMLElement(name: name)
+        element.setChildren(children)
+        element.attributes = attributes
+
+        return element
+    }
 
     /*!
         @method attributeWithName:stringValue:
@@ -176,19 +182,28 @@ public class NSXMLNode : NSObject, NSCopying {
         @method processingInstructionWithName:stringValue:
         @abstract Returns a processing instruction <tt>&lt;?name stringValue></tt>.
     */
-    public class func processingInstructionWithName(name: String, stringValue: String) -> AnyObject { NSUnimplemented() }
+    public class func processingInstructionWithName(name: String, stringValue: String) -> AnyObject {
+        let node = xmlNewPI(name, stringValue)
+        return NSXMLNode(ptr: node)
+    }
 
     /*!
         @method commentWithStringValue:
         @abstract Returns a comment <tt>&lt;--stringValue--></tt>.
     */
-    public class func commentWithStringValue(stringValue: String) -> AnyObject { NSUnimplemented() }
+    public class func commentWithStringValue(stringValue: String) -> AnyObject {
+        let node = xmlNewComment(stringValue)
+        return NSXMLNode(ptr: node)
+    }
 
     /*!
         @method textWithStringValue:
         @abstract Returns a text node.
     */
-    public class func textWithStringValue(stringValue: String) -> AnyObject { NSUnimplemented() }
+    public class func textWithStringValue(stringValue: String) -> AnyObject {
+        let node = xmlNewText(stringValue)
+        return NSXMLNode(ptr: node)
+    }
 
     /*!
         @method DTDNodeWithXMLString:
@@ -272,7 +287,7 @@ public class NSXMLNode : NSObject, NSCopying {
             return String.fromCString(UnsafePointer<CChar>(content))
         }
         set {
-            _removeAllChildren() // in case anyone is holding a reference to any of these children we're about to destroy
+            _removeAllChildNodesExceptAttributes() // in case anyone is holding a reference to any of these children we're about to destroy
 
             if let string = newValue {
                 let newContent = xmlEncodeEntitiesReentrant(_xmlNode.memory.doc, string)
@@ -284,19 +299,67 @@ public class NSXMLNode : NSObject, NSCopying {
         }
     }
 
-    private func _removeAllChildren() {
+    private func _removeAllChildNodesExceptAttributes() {
         for node in _childNodes {
-            xmlUnlinkNode(node._xmlNode)
+            if node._xmlNode.memory.type != XML_ATTRIBUTE_NODE {
+                xmlUnlinkNode(node._xmlNode)
+                _childNodes.remove(node)
+            }
         }
-
-        _childNodes.removeAll()
     }
 
+    internal func _removeAllChildren() {
+        var child = _xmlNode.memory.children
+        while child != nil {
+            xmlUnlinkNode(child)
+            child = child.memory.next
+        }
+        _childNodes.removeAll(keepCapacity: true)
+    }
     /*!
         @method setStringValue:resolvingEntities:
         @abstract Sets the content as with @link setStringValue: @/link, but when "resolve" is true, character references, predefined entities and user entities available in the document's dtd are resolved. Entities not available in the dtd remain in their entity form.
     */
-    public func setStringValue(string: String, resolvingEntities resolve: Bool) { NSUnimplemented() } //primitive
+    public func setStringValue(string: String, resolvingEntities resolve: Bool) {
+        guard resolve else {
+            stringValue = string
+            return
+        }
+
+        _removeAllChildNodesExceptAttributes()
+
+        var entities: [(Range<Int>, String)] = []
+        var entityChars: [Character] = []
+        var inEntity = false
+        var startIndex = 0
+        for (index, char) in string.characters.enumerate() {
+            if char == "&" {
+                inEntity = true
+                startIndex = index
+                continue
+            }
+            if char == ";" && inEntity {
+                inEntity = false
+                entities.append((Range<Int>(start: startIndex, end: index + 1),String(entityChars)))
+                startIndex = 0
+                entityChars.removeAll()
+            }
+            if inEntity {
+                entityChars.append(char)
+            }
+        }
+
+        var result: [Character] = Array(string.characters)
+        for (range, entity) in entities {
+            let entityPtr = xmlGetDocEntity(_xmlNode.memory.doc, entity)
+            if entityPtr != nil {
+                let replacement = String.fromCString(UnsafePointer<CChar>(entityPtr.memory.content)) ?? ""
+                result.replaceRange(range, with: replacement.characters)
+            }
+        }
+        stringValue = String(result)
+
+    } //primitive
 
     /*!
         @method index
@@ -380,12 +443,12 @@ public class NSXMLNode : NSObject, NSCopying {
     public func childAtIndex(index: Int) -> NSXMLNode? {
         precondition(index >= 0)
         precondition(index < childCount)
-        
+
         var nodeIndex = startIndex
         for _ in 0..<index {
             nodeIndex = nodeIndex.successor()
         }
-        
+
         return self[nodeIndex]
     } //primitive
 
@@ -646,18 +709,46 @@ public class NSXMLNode : NSObject, NSCopying {
         @abstract The representation of this node as it would appear in an XML document.
     */
     public var XMLString: String {
-        let buffer = xmlAllocOutputBuffer(nil)
-        defer { xmlFree(buffer) }
-        xmlNodeDumpOutput(buffer, _xmlNode.memory.doc, _xmlNode, 0, 0, "utf-8")
-
-        return String.fromCString(UnsafePointer<CChar>(xmlOutputBufferGetContent(buffer))) ?? ""
+        return XMLStringWithOptions(NSXMLNodeOptionsNone)
     }
 
     /*!
         @method XMLStringWithOptions:
         @abstract The representation of this node as it would appear in an XML document, with various output options available.
     */
-    public func XMLStringWithOptions(options: Int) -> String { NSUnimplemented() }
+    public func XMLStringWithOptions(options: Int) -> String {
+        xmlThrDefSubstituteEntitiesDefaultValue(1)
+
+        let buffer = xmlBufferCreate()
+        defer { xmlBufferFree(buffer) }
+
+        var xmlOptions: UInt32 = XML_SAVE_AS_XML.rawValue
+        if (options & NSXMLNodePreserveWhitespace) != 0 {
+            xmlOptions |= XML_SAVE_WSNONSIG.rawValue
+        }
+
+        if (options & NSXMLNodeCompactEmptyElement) == 0 {
+            xmlOptions |= XML_SAVE_NO_EMPTY.rawValue
+        }
+
+        if (options & NSXMLNodePrettyPrint) != 0 {
+            xmlOptions |= XML_SAVE_FORMAT.rawValue
+        }
+
+        let ctx = xmlSaveToBuffer(buffer, "utf-8", Int32(xmlOptions))
+        xmlSaveTree(ctx, _xmlNode)
+        let error = xmlSaveClose(ctx)
+
+        if error == -1 {
+            return ""
+        }
+
+        let bufferContents = xmlBufferContent(buffer)
+
+        let result = String.fromCString(UnsafePointer<CChar>(bufferContents))
+
+        return result ?? ""
+    }
 
     /*!
         @method canonicalXMLStringPreservingComments:

@@ -222,7 +222,6 @@ public class NSXMLElement : NSXMLNode {
             let currChild = childAtIndex(index - 1)!._xmlNode
             xmlAddNextSibling(currChild, child._xmlNode)
         }
-
     } //primitive
 
     /*!

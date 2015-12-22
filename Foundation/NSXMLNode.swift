@@ -186,7 +186,7 @@ public class NSXMLNode : NSObject, NSCopying {
         let node = xmlNewPI(name, stringValue)
         return NSXMLNode(ptr: node)
     }
-
+<
     /*!
         @method commentWithStringValue:
         @abstract Returns a comment <tt>&lt;--stringValue--></tt>.
@@ -204,7 +204,7 @@ public class NSXMLNode : NSObject, NSCopying {
         let node = xmlNewText(stringValue)
         return NSXMLNode(ptr: node)
     }
-
+<
     /*!
         @method DTDNodeWithXMLString:
         @abstract Returns an element, attribute, entity, or notation DTD node based on the full XML string.
@@ -298,7 +298,7 @@ public class NSXMLNode : NSObject, NSCopying {
             }
         }
     }
-
+<
     private func _removeAllChildNodesExceptAttributes() {
         for node in _childNodes {
             if node._xmlNode.memory.type != XML_ATTRIBUTE_NODE {
@@ -326,7 +326,7 @@ public class NSXMLNode : NSObject, NSCopying {
             stringValue = string
             return
         }
-
+<
         _removeAllChildNodesExceptAttributes()
 
         var entities: [(Range<Int>, String)] = []

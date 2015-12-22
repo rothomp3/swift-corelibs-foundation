@@ -4,7 +4,7 @@ module libxml2 [extern_c] [system] {
     header "/usr/include/libxml2/libxml/xpath.h"
     header "/usr/include/libxml2/libxml/xmlsave.h"
     header "/usr/include/libxml2/libxml/xmlwriter.h"
-    
+
     export *
     link "xml2"
 }

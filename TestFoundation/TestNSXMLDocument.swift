@@ -165,7 +165,7 @@ class TestNSXMLDocument : XCTestCase {
         xmlAddDocEntity(xmlDocPtr(doc._xmlNode), "author", Int32(XML_INTERNAL_GENERAL_ENTITY.rawValue), nil, nil, "Robert Thompson")
         let author = NSXMLElement(name: "author")
         doc.rootElement()?.addChild(author)
-        author.setStringValue("&author;", resolvingEntities: true)
+        author.setStringValue("&author;&03A3;", resolvingEntities: true)
         print(doc)
     }
 

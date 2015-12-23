@@ -352,14 +352,21 @@ public class NSXMLNode : NSObject, NSCopying {
 
         var result: [Character] = Array(string.characters)
         for (range, entity) in entities {
-            let entityPtr = xmlGetDocEntity(_xmlNode.memory.doc, entity)
+            var entityPtr = xmlGetDocEntity(_xmlNode.memory.doc, entity)
+            if entityPtr == nil {
+                entityPtr = xmlGetDtdEntity(_xmlNode.memory.doc, entity)
+            }
+            if entityPtr == nil {
+                entityPtr = xmlGetParameterEntity(_xmlNode.memory.doc, entity)
+            }
             if entityPtr != nil {
                 let replacement = String.fromCString(UnsafePointer<CChar>(entityPtr.memory.content)) ?? ""
                 result.replaceRange(range, with: replacement.characters)
+            } else {
+                result.replaceRange(range, with: []) // This appears to be how Darwin Foundation does it
             }
         }
         stringValue = String(result)
-
     } //primitive
 
     /*!

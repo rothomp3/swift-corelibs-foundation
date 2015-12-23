@@ -161,7 +161,7 @@ public class NSXMLElement : NSXMLNode {
         let attribute = xmlHasProp(_xmlNode, name)
         return NSXMLNode._objectNodeForNode(xmlNodePtr(attribute))
     }
-<
+
     /*!
         @method attributeForLocalName:URI:
         @abstract Returns an attribute matching this localname URI pair.

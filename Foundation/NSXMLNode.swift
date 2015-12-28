@@ -725,7 +725,6 @@ public class NSXMLNode : NSObject, NSCopying {
         @abstract The representation of this node as it would appear in an XML document, with various output options available.
     */
     public func XMLStringWithOptions(options: Int) -> String {
-        xmlThrDefSubstituteEntitiesDefaultValue(1)
 
         let buffer = xmlBufferCreate()
         defer { xmlBufferFree(buffer) }

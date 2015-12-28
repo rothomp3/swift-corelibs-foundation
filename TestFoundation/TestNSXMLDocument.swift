@@ -32,7 +32,8 @@ class TestNSXMLDocument : XCTestCase {
             ("test_objectValue", test_objectValue),
             ("test_attributes", test_attributes),
             ("test_comments", test_comments),
-            ("test_processingInstruction", test_processingInstruction)
+            ("test_processingInstruction", test_processingInstruction),
+            ("test_parseXMLString", test_parseXMLString)
         ]
     }
 
@@ -227,5 +228,17 @@ class TestNSXMLDocument : XCTestCase {
         document.addChild(pi)
 
         XCTAssertEqual(pi.XMLString, "<?xml-stylesheet type=\"text/css\" href=\"style.css\"?>")
+    }
+
+    func test_parseXMLString() {
+        let string = "<?xml version=\"1.0\" encoding=\"utf-8\"?><!DOCTYPE test.dtd [\n        <!ENTITY author \"Robert Thompson\">\n        ]><root><author>&author;</author></root>"
+        do {
+            let doc = try NSXMLDocument(XMLString: string, options: NSXMLNodeLoadExternalEntitiesNever)
+            XCTAssert(doc.childCount == 1)
+        } catch {
+            XCTFail("\(error)")
+        }
+
+
     }
 }

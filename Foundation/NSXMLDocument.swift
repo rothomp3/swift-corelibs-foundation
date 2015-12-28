@@ -62,7 +62,14 @@ public class NSXMLDocument : NSXMLNode {
         @method initWithXMLString:options:error:
         @abstract Returns a document created from either XML or HTML, if the HTMLTidy option is set. Parse errors are returned in <tt>error</tt>.
     */
-    public convenience init(XMLString string: String, options mask: Int) throws { NSUnimplemented() }
+    public convenience init(XMLString string: String, options mask: Int) throws {
+        let data: NSData = string.withCString {
+            (stringPtr: UnsafePointer<CChar>) -> NSData in
+            return NSData(bytes: UnsafeMutablePointer<Void>(stringPtr), length: Int(strlen(stringPtr)) + 1, copy: true, deallocator: nil)
+        }
+
+        try self.init(data: data, options: mask)
+    }
 
     /*!
         @method initWithContentsOfURL:options:error:
@@ -74,7 +81,23 @@ public class NSXMLDocument : NSXMLNode {
         @method initWithData:options:error:
         @abstract Returns a document created from data. Parse errors are returned in <tt>error</tt>.
     */
-    public init(data: NSData, options mask: Int) throws { NSUnimplemented() } //primitive
+    public init(data: NSData, options mask: Int) throws {
+        var xmlOptions: UInt32 = 0
+        if mask & NSXMLNodePreserveWhitespace != 0 {
+            xmlOptions |= XML_PARSE_NOBLANKS.rawValue
+        }
+
+        if mask & NSXMLNodeLoadExternalEntitiesNever != 0 {
+            xmlOptions |= XML_PARSE_NOENT.rawValue
+        }
+
+        if mask & NSXMLNodeLoadExternalEntitiesAlways == 0 {
+            xmlOptions |= XML_PARSE_NOENT.rawValue
+        }
+
+        let docPtr = xmlReadMemory(UnsafePointer<Int8>(data.bytes), Int32(data.length), nil, nil, Int32(xmlOptions))
+        super.init(ptr: xmlNodePtr(docPtr))
+    } //primitive
 
     /*!
         @method initWithRootElement:

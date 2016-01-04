@@ -40,8 +40,8 @@ public class NSXMLElement : NSXMLNode {
     public convenience init(name: String, stringValue string: String?) {
         self.init(name: name, URI: nil)
         if let string = string {
-            let child = xmlNewText(string)
-            xmlAddChild(_xmlNode, child)
+            let child = NSXMLNode.textWithStringValue(string) as! NSXMLNode
+            _addChild(child)
         }
     }
 
@@ -60,7 +60,7 @@ public class NSXMLElement : NSXMLNode {
         @abstract Returns all of the child elements that match this name.
     */
     public func elementsForName(name: String) -> [NSXMLElement] {
-        return self.filter({ $0._xmlNode.memory.type == XML_ELEMENT_NODE }).filter({ $0.name == name }).flatMap({ $0 as? NSXMLElement })
+        return self.filter({ $0.kind == .ElementKind }).filter({ $0.name == name }).flatMap({ $0 as? NSXMLElement })
     }
 
     /*!
@@ -74,7 +74,7 @@ public class NSXMLElement : NSXMLNode {
         @abstract Adds an attribute. Attributes with duplicate names are not added.
     */
     public func addAttribute(attribute: NSXMLNode) {
-        guard xmlHasProp(_xmlNode, attribute._xmlNode.memory.name) == nil else { return }
+        guard attributes?.contains({ $0.name == attribute.name }) == false else { return }
         addChild(attribute)
     } //primitive
 
@@ -83,13 +83,9 @@ public class NSXMLElement : NSXMLNode {
         @abstract Removes an attribute based on its name.
     */
     public func removeAttributeForName(name: String) {
-        let prop = xmlHasProp(_xmlNode, name)
-        if prop != nil {
-            let propNode = NSXMLNode._objectNodeForNode(xmlNodePtr(prop))
-            _childNodes.remove(propNode)
-            // We can't use `xmlRemoveProp` because someone else may still have a reference to this attribute
-            xmlUnlinkNode(xmlNodePtr(prop))
-        }
+        guard let attribute = self.filter({ $0.kind == .AttributeKind }).filter({ $0.name == name }).first else { return }
+
+        _removeChildAtIndex(attribute.index)
     } //primitive
 
     /*!
@@ -98,12 +94,7 @@ public class NSXMLElement : NSXMLNode {
     */
     public var attributes: [NSXMLNode]? {
         get {
-            var result: [NSXMLNode] = []
-            var attribute = _xmlNode.memory.properties
-            while attribute != nil {
-                result.append(NSXMLNode._objectNodeForNode(xmlNodePtr(attribute)))
-                attribute = attribute.memory.next
-            }
+            let result = self.filter({ $0.kind == .AttributeKind })
             return result.count > 0 ? result : nil // This appears to be how Darwin does it
         }
 
@@ -121,24 +112,9 @@ public class NSXMLElement : NSXMLNode {
     }
 
     private func removeAttributes() {
-        var attribute = _xmlNode.memory.properties
-        while attribute != nil {
-            var shouldFreeNode = true
-            if attribute.memory._private != nil {
-                let nodeUnmanagedRef = Unmanaged<NSXMLNode>.fromOpaque(attribute.memory._private)
-                let node = nodeUnmanagedRef.takeUnretainedValue()
-                _childNodes.remove(node)
-
-                shouldFreeNode = false
-            }
-
-            let temp = attribute.memory.next
-            xmlUnlinkNode(xmlNodePtr(attribute))
-            if shouldFreeNode {
-                xmlFreeNode(xmlNodePtr(attribute))
-            }
-
-            attribute = temp
+        guard let attributes = self.attributes else { return }
+        for node in attributes {
+            node.detach()
         }
     }
 
@@ -158,8 +134,7 @@ public class NSXMLElement : NSXMLNode {
         @abstract Returns an attribute matching this name.
     */
     public func attributeForName(name: String) -> NSXMLNode? {
-        let attribute = xmlHasProp(_xmlNode, name)
-        return NSXMLNode._objectNodeForNode(xmlNodePtr(attribute))
+        return attributes?.filter({ $0.name == name }).first
     }
 
     /*!
@@ -258,20 +233,6 @@ public class NSXMLElement : NSXMLNode {
     */
     public func normalizeAdjacentTextNodesPreservingCDATA(preserve: Bool) { NSUnimplemented() }
 
-    internal override class func _objectNodeForNode(node: xmlNodePtr) -> NSXMLElement {
-        precondition(node.memory.type == XML_ELEMENT_NODE)
-
-        if node.memory._private != nil {
-            let unmanaged = Unmanaged<NSXMLElement>.fromOpaque(node.memory._private)
-            return unmanaged.takeUnretainedValue()
-        }
-
-        return NSXMLElement(ptr: node)
-    }
-
-    internal override init(ptr: xmlNodePtr) {
-        super.init(ptr: ptr)
-    }
 }
 
 extension NSXMLElement {

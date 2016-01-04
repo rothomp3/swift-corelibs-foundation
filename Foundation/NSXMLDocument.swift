@@ -53,11 +53,6 @@ public enum NSXMLDocumentContentKind : UInt {
 	@discussion Note: if the application of a method would result in more than one element in the children array, an exception is thrown. Trying to add a document, namespace, attribute, or node with a parent also throws an exception. To add a node with a parent first detach or create a copy of it.
 */
 public class NSXMLDocument : NSXMLNode {
-    private var _xmlDoc: xmlDocPtr {
-        get {
-            return xmlDocPtr(_xmlNode)
-        }
-    }
     /*!
         @method initWithXMLString:options:error:
         @abstract Returns a document created from either XML or HTML, if the HTMLTidy option is set. Parse errors are returned in <tt>error</tt>.
@@ -86,23 +81,7 @@ public class NSXMLDocument : NSXMLNode {
         @abstract Returns a document created from data. Parse errors are returned in <tt>error</tt>.
     */
     public init(data: NSData, options mask: Int) throws {
-        var xmlOptions: UInt32 = 0
-        if mask & NSXMLNodePreserveWhitespace == 0 {
-            xmlOptions |= XML_PARSE_NOBLANKS.rawValue
-        }
-
-        if mask & NSXMLNodeLoadExternalEntitiesNever != 0 {
-            xmlOptions &= ~(XML_PARSE_NOENT.rawValue)
-        } else {
-            xmlOptions |= XML_PARSE_NOENT.rawValue
-        }
-
-        if mask & NSXMLNodeLoadExternalEntitiesAlways != 0 {
-            xmlOptions |= XML_PARSE_DTDLOAD.rawValue
-        }
-
-        let docPtr = xmlReadMemory(UnsafePointer<Int8>(data.bytes), Int32(data.length), nil, nil, Int32(xmlOptions))
-        super.init(ptr: xmlNodePtr(docPtr))
+        NSUnimplemented()
     } //primitive
 
     /*!
@@ -111,11 +90,11 @@ public class NSXMLDocument : NSXMLNode {
     */
     public init(rootElement element: NSXMLElement?) {
         precondition(element?.parent == nil)
-
+        self.standalone = false
+        self.documentContentKind = .XMLKind
         super.init(kind: .DocumentKind, options: NSXMLNodeOptionsNone)
         if let element = element {
-            xmlDocSetRootElement(_xmlDoc, element._xmlNode)
-            _childNodes.insert(element)
+            _addChild(element)
         }
     }
 
@@ -125,80 +104,25 @@ public class NSXMLDocument : NSXMLNode {
         @method characterEncoding
         @abstract Sets the character encoding to an IANA type.
     */
-    public var characterEncoding: String? {
-        get {
-            return String.fromCString(UnsafePointer<CChar>(_xmlDoc.memory.encoding))
-        }
-        set {
-            if _xmlDoc.memory.encoding != nil {
-                xmlFree(UnsafeMutablePointer<xmlChar>(_xmlDoc.memory.encoding))
-            }
-            if let encoding = newValue {
-                _xmlDoc.memory.encoding = encoding._xmlString
-            } else {
-                _xmlDoc.memory.encoding = nil
-            }
-        }
-    } //primitive
+    public var characterEncoding: String? //primitive
 
     /*!
         @method version
         @abstract Sets the XML version. Should be 1.0 or 1.1.
     */
-    public var version: String? {
-        get {
-            return String.fromCString(UnsafePointer<CChar>(_xmlDoc.memory.version))
-        }
-        set {
-            newValue?.withCString {
-                ptr -> Void in
-                memcpy(UnsafeMutablePointer<Void>(_xmlDoc.memory.version), ptr, 3)
-            }
-        }
-    } //primitive
+    public var version: String?  //primitive
 
     /*!
         @method standalone
         @abstract Set whether this document depends on an external DTD. If this option is set the standalone declaration will appear on output.
     */
-    public var standalone: Bool {
-        get {
-            return _xmlDoc.memory.standalone != 0
-        }
-        set {
-            if newValue {
-                _xmlDoc.memory.standalone = 1
-            } else {
-                _xmlDoc.memory.standalone = 0
-            }
-        }
-    }//primitive
+    public var standalone: Bool //primitive
 
     /*!
         @method documentContentKind
         @abstract The kind of document.
     */
-    public var documentContentKind: NSXMLDocumentContentKind  {
-        get {
-            let properties = _xmlDoc.memory.properties
-
-            if properties & Int32(XML_DOC_HTML.rawValue) != 0 {
-                return .HTMLKind
-            }
-
-            return .XMLKind
-        }
-
-        set {
-            switch newValue {
-            case .HTMLKind:
-                _xmlDoc.memory.properties |= Int32(XML_DOC_HTML.rawValue)
-
-            default:
-                _xmlDoc.memory.properties &= ~Int32(XML_DOC_HTML.rawValue)
-            }
-        }
-    }//primitive
+    public var documentContentKind: NSXMLDocumentContentKind  //primitive
 
     /*!
         @method MIMEType
@@ -219,12 +143,9 @@ public class NSXMLDocument : NSXMLNode {
     public func setRootElement(root: NSXMLElement) {
         precondition(root.parent == nil)
 
-        for child in _childNodes {
-            child.detach()
-        }
+        _removeAllChildren()
 
-        xmlDocSetRootElement(_xmlDoc, root._xmlNode)
-        _childNodes.insert(root)
+        _addChild(root)
     }
 
     /*!
@@ -232,12 +153,7 @@ public class NSXMLDocument : NSXMLNode {
         @abstract The root element.
     */
     public func rootElement() -> NSXMLElement? {
-        let rootPtr = xmlDocGetRootElement(_xmlDoc)
-        if rootPtr == nil {
-            return nil
-        }
-
-        return NSXMLNode._objectNodeForNode(rootPtr) as? NSXMLElement
+        return self.filter({ $0.kind == .ElementKind }).first as? NSXMLElement
     } //primitive
 
     /*!
@@ -245,6 +161,7 @@ public class NSXMLDocument : NSXMLNode {
         @abstract Inserts a child at a particular index.
     */
     public func insertChild(child: NSXMLNode, atIndex index: Int) {
+        precondition((child.kind == .ElementKind && self.rootElement() == nil) || child.kind == .CommentKind || child.kind == .ProcessingInstructionKind)
         _insertChild(child, atIndex: index)
     } //primitive
 
@@ -253,7 +170,9 @@ public class NSXMLDocument : NSXMLNode {
         @abstract Insert several children at a particular index.
     */
     public func insertChildren(children: [NSXMLNode], atIndex index: Int) {
-        _insertChildren(children, atIndex: index)
+        for (childIndex, child) in children.enumerate() {
+            insertChild(child, atIndex: index + childIndex)
+        }
     }
 
     /*!
@@ -277,7 +196,7 @@ public class NSXMLDocument : NSXMLNode {
         @abstract Adds a child to the end of the existing children.
     */
     public func addChild(child: NSXMLNode) {
-        _addChild(child)
+        insertChild(child, atIndex: childCount)
     }
 
     /*!
@@ -319,21 +238,6 @@ public class NSXMLDocument : NSXMLNode {
     public func objectByApplyingXSLTAtURL(xsltURL: NSURL, arguments argument: [String : String]?) throws -> AnyObject { NSUnimplemented() }
 
     public func validate() throws { NSUnimplemented() }
-
-    internal override class func _objectNodeForNode(node: xmlNodePtr) -> NSXMLDocument {
-        precondition(node.memory.type == XML_DOCUMENT_NODE)
-
-        if node.memory._private != nil {
-            let unmanaged = Unmanaged<NSXMLDocument>.fromOpaque(node.memory._private)
-            return unmanaged.takeUnretainedValue()
-        }
-
-        return NSXMLDocument(ptr: node)
-    }
-
-    internal override init(ptr: xmlNodePtr) {
-        super.init(ptr: ptr)
-    }
 }
 
 internal extension String {

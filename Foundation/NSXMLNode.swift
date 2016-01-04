@@ -50,16 +50,14 @@ public enum NSXMLNodeKind : UInt {
     @abstract The basic unit of an XML document.
 */
 public class NSXMLNode : NSObject, NSCopying {
+    
 
     public override func copy() -> AnyObject {
         return copyWithZone(nil)
     }
 
-    internal let _xmlNode: xmlNodePtr
-
     public func copyWithZone(zone: NSZone) -> AnyObject {
-        let newNode = xmlCopyNode(_xmlNode, 1)
-        return NSXMLNode._objectNodeForNode(newNode)
+        NSUnimplemented()
     }
 
     /*!
@@ -76,28 +74,8 @@ public class NSXMLNode : NSObject, NSCopying {
     */
     public init(kind: NSXMLNodeKind, options: Int) {
 
-        switch kind {
-        case .DocumentKind:
-            let docPtr = xmlNewDoc("1.0")
-            docPtr.memory.standalone = 0 // same default as on Darwin
-            _xmlNode = UnsafeMutablePointer<xmlNode>(docPtr)
-
-        case .ElementKind:
-            _xmlNode = xmlNewNode(nil, "")
-
-        case .AttributeKind:
-            _xmlNode = xmlNodePtr(xmlNewProp(nil, "", ""))
-
-        default:
-            _xmlNode = nil
-        }
-
+        self.kind = kind
         super.init()
-
-        let unmanaged = Unmanaged<NSXMLNode>.passUnretained(self)
-        let ptr = UnsafeMutablePointer<Void>(unmanaged.toOpaque())
-
-        _xmlNode.memory._private = ptr
     }
 
     /*!
@@ -158,9 +136,10 @@ public class NSXMLNode : NSObject, NSCopying {
         @abstract Returns an attribute <tt>name="stringValue"</tt>.
     */
     public class func attributeWithName(name: String, stringValue: String) -> AnyObject {
-        let attribute = xmlNewProp(nil, name, stringValue)
-
-        return NSXMLNode(ptr: xmlNodePtr(attribute))
+        let result = NSXMLNode(kind: .AttributeKind)
+        result.stringValue = stringValue
+        result.name = name
+        return result
     }
 
     /*!
@@ -185,8 +164,10 @@ public class NSXMLNode : NSObject, NSCopying {
         @abstract Returns a processing instruction <tt>&lt;?name stringValue></tt>.
     */
     public class func processingInstructionWithName(name: String, stringValue: String) -> AnyObject {
-        let node = xmlNewPI(name, stringValue)
-        return NSXMLNode(ptr: node)
+        let result = NSXMLNode(kind: .ProcessingInstructionKind)
+        result.stringValue = stringValue
+        result.name = name
+        return result
     }
 
     /*!
@@ -194,8 +175,9 @@ public class NSXMLNode : NSObject, NSCopying {
         @abstract Returns a comment <tt>&lt;--stringValue--></tt>.
     */
     public class func commentWithStringValue(stringValue: String) -> AnyObject {
-        let node = xmlNewComment(stringValue)
-        return NSXMLNode(ptr: node)
+        let result = NSXMLNode(kind: .CommentKind)
+        result.stringValue = stringValue
+        return result
     }
 
     /*!
@@ -203,8 +185,9 @@ public class NSXMLNode : NSObject, NSCopying {
         @abstract Returns a text node.
     */
     public class func textWithStringValue(stringValue: String) -> AnyObject {
-        let node = xmlNewText(stringValue)
-        return NSXMLNode(ptr: node)
+        let result = NSXMLNode(kind: .TextKind)
+        result.stringValue = stringValue
+        return result
     }
 
     /*!
@@ -217,25 +200,7 @@ public class NSXMLNode : NSObject, NSCopying {
         @method kind
         @abstract Returns an element, attribute, entity, or notation DTD node based on the full XML string.
     */
-    public var kind: NSXMLNodeKind  {
-        guard _xmlNode != nil else { return .InvalidKind }
-        switch _xmlNode.memory.type {
-        case XML_ELEMENT_NODE:
-            return .ElementKind
-
-        case XML_ATTRIBUTE_NODE:
-            return .AttributeKind
-
-        case XML_DOCUMENT_NODE:
-            return .DocumentKind
-
-        case XML_DTD_NODE:
-            return .DTDKind
-
-        default:
-            return .InvalidKind
-        }
-    } //primitive
+    public var kind: NSXMLNodeKind  //primitive
 
     /*!
         @method name
@@ -243,40 +208,42 @@ public class NSXMLNode : NSObject, NSCopying {
     */
     public var name: String? {
         get {
-            return String.fromCString(UnsafePointer<CChar>(_xmlNode.memory.name))
+            return _name
         }
         set {
-            if let newName = newValue {
-                xmlNodeSetName(_xmlNode, newName)
-            } else {
-                xmlNodeSetName(_xmlNode, "")
+            switch kind {
+            case .AttributeDeclarationKind:
+                fallthrough
+            case .AttributeKind:
+                fallthrough
+            case .ElementDeclarationKind:
+                fallthrough
+            case .ElementKind:
+                fallthrough
+            case .EntityDeclarationKind:
+                fallthrough
+            case .NamespaceKind:
+                fallthrough
+            case .NotationDeclarationKind:
+                fallthrough
+            case .ProcessingInstructionKind:
+                _name = newValue
+
+            default:
+                break
             }
         }
     }
 
-    private var _objectValue: AnyObject? = nil
-
+    private var _name: String? = nil
     /*!
         @method objectValue
         @abstract Sets the content of the node. Setting the objectValue removes all existing children including processing instructions and comments. Setting the object value on an element creates a single text node child.
     */
     public var objectValue: AnyObject? {
-        get {
-            if let value = _objectValue {
-                return value
-            } else {
-                return stringValue?._bridgeToObject()
-            }
-        }
-        set {
-            _objectValue = newValue
-            if let describableValue = newValue as? CustomStringConvertible {
-                stringValue = "\(describableValue.description)"
-            } else if let value = newValue {
-                stringValue = "\(value)"
-            } else {
-                stringValue = nil
-            }
+
+        willSet {
+
         }
     }//primitive
 
@@ -286,39 +253,34 @@ public class NSXMLNode : NSObject, NSCopying {
     */
     public var stringValue: String? {
         get {
-            let content = xmlNodeGetContent(_xmlNode)
-            defer { xmlFree(content) }
-            return String.fromCString(UnsafePointer<CChar>(content))
-        }
-        set {
-            _removeAllChildNodesExceptAttributes() // in case anyone is holding a reference to any of these children we're about to destroy
-
-            if let string = newValue {
-                let newContent = xmlEncodeEntitiesReentrant(_xmlNode.memory.doc, string)
-                defer { xmlFree(newContent) }
-                xmlNodeSetContent(_xmlNode, newContent)
+            if let value = objectValue as? CustomStringConvertible {
+                return "\(value.description)"
+            } else if let value = objectValue {
+                return "\(value)"
             } else {
-                xmlNodeSetContent(_xmlNode, nil)
+                return nil
             }
+        }
+
+        set {
+            objectValue = newValue?._bridgeToObject()
         }
     }
 
     private func _removeAllChildNodesExceptAttributes() {
-        for node in _childNodes {
-            if node._xmlNode.memory.type != XML_ATTRIBUTE_NODE {
-                xmlUnlinkNode(node._xmlNode)
-                _childNodes.remove(node)
+        for node in self {
+            if node.kind != .AttributeKind {
+                node.detach()
             }
         }
     }
 
     internal func _removeAllChildren() {
-        var child = _xmlNode.memory.children
-        while child != nil {
-            xmlUnlinkNode(child)
-            child = child.memory.next
+        for child in self {
+            child.parent = nil
         }
-        _childNodes.removeAll(keepCapacity: true)
+        _firstChild = nil
+        _lastChild = nil
     }
 
     /*!
@@ -355,21 +317,21 @@ public class NSXMLNode : NSObject, NSCopying {
         }
 
         var result: [Character] = Array(string.characters)
-        for (range, entity) in entities {
-            var entityPtr = xmlGetDocEntity(_xmlNode.memory.doc, entity)
-            if entityPtr == nil {
-                entityPtr = xmlGetDtdEntity(_xmlNode.memory.doc, entity)
-            }
-            if entityPtr == nil {
-                entityPtr = xmlGetParameterEntity(_xmlNode.memory.doc, entity)
-            }
-            if entityPtr != nil {
-                let replacement = String.fromCString(UnsafePointer<CChar>(entityPtr.memory.content)) ?? ""
-                result.replaceRange(range, with: replacement.characters)
-            } else {
-                result.replaceRange(range, with: []) // This appears to be how Darwin Foundation does it
-            }
-        }
+//        for (range, entity) in entities {
+//            var entityPtr = xmlGetDocEntity(_xmlNode.memory.doc, entity)
+//            if entityPtr == nil {
+//                entityPtr = xmlGetDtdEntity(_xmlNode.memory.doc, entity)
+//            }
+//            if entityPtr == nil {
+//                entityPtr = xmlGetParameterEntity(_xmlNode.memory.doc, entity)
+//            }
+//            if entityPtr != nil {
+//                let replacement = String.fromCString(UnsafePointer<CChar>(entityPtr.memory.content)) ?? ""
+//                result.replaceRange(range, with: replacement.characters)
+//            } else {
+//                result.replaceRange(range, with: []) // This appears to be how Darwin Foundation does it
+//            }
+//        }
         stringValue = String(result)
     } //primitive
 
@@ -377,14 +339,7 @@ public class NSXMLNode : NSObject, NSCopying {
         @method index
         @abstract A node's index amongst its siblings.
     */
-    public var index: Int {
-        if let siblings = self.parent?.children,
-            let index = siblings.indexOf(self) {
-            return index
-        }
-
-        return 0
-    } //primitive
+    public var index: Int = -1 //primitive
 
     /*!
         @method level
@@ -392,10 +347,10 @@ public class NSXMLNode : NSObject, NSCopying {
     */
     public var level: Int {
         var result = 0
-        var parent = _xmlNode.memory.parent
-        while parent != nil {
+        var maybeParent = parent
+        while maybeParent != nil {
             result += 1
-            parent = parent.memory.parent
+            maybeParent = parent?.parent
         }
 
         return result
@@ -405,30 +360,20 @@ public class NSXMLNode : NSObject, NSCopying {
         @method rootDocument
         @abstract The encompassing document or nil.
     */
-    public var rootDocument: NSXMLDocument? {
-        guard _xmlNode.memory.doc != nil else { return nil }
-
-        return NSXMLNode._objectNodeForNode(xmlNodePtr(_xmlNode.memory.doc)) as? NSXMLDocument
-    }
+    public var rootDocument: NSXMLDocument?
 
     /*!
         @method parent
         @abstract The parent of this node. Documents and standalone Nodes have a nil parent; there is not a 1-to-1 relationship between parent and children, eg a namespace cannot be a child but has a parent element.
     */
-    /*@NSCopying*/ public var parent: NSXMLNode? {
-        let parentPtr = _xmlNode.memory.parent
-        guard parentPtr != nil else { return nil }
-
-        return NSXMLNode._objectNodeForNode(parentPtr)
-    } //primitive
+    /*@NSCopying*/ public var parent: NSXMLNode?
+     //primitive
 
     /*!
         @method childCount
         @abstract The amount of children, relevant for documents, elements, and document type declarations. Use this instead of [[self children] count].
     */
-    public var childCount: Int {
-        return Int(xmlChildElementCount(_xmlNode))
-    } //primitive
+    public var childCount: Int = 0//primitive
 
     /*!
         @method children
@@ -448,6 +393,9 @@ public class NSXMLNode : NSObject, NSCopying {
         }
     } //primitive
 
+    private var _firstChild: NSXMLNode?
+    private var _lastChild: NSXMLNode?
+
     /*!
         @method childAtIndex:
         @abstract Returns the child node at a particular index.
@@ -461,28 +409,20 @@ public class NSXMLNode : NSObject, NSCopying {
             nodeIndex = nodeIndex.successor()
         }
 
-        return self[nodeIndex]
+        return nodeIndex.node
     } //primitive
 
     /*!
         @method previousSibling:
         @abstract Returns the previous sibling, or nil if there isn't one.
     */
-    /*@NSCopying*/ public var previousSibling: NSXMLNode? {
-        guard _xmlNode.memory.prev != nil else { return nil }
-
-        return NSXMLNode._objectNodeForNode(_xmlNode.memory.prev)
-    }
+    /*@NSCopying*/ public var previousSibling: NSXMLNode?
 
     /*!
         @method nextSibling:
         @abstract Returns the next sibling, or nil if there isn't one.
     */
-    /*@NSCopying*/ public var nextSibling: NSXMLNode? {
-        guard _xmlNode.memory.next != nil else { return nil }
-
-        return NSXMLNode._objectNodeForNode(_xmlNode.memory.next)
-    }
+    /*@NSCopying*/ public var nextSibling: NSXMLNode?
 
     /*!
         @method previousNode:
@@ -490,8 +430,8 @@ public class NSXMLNode : NSObject, NSCopying {
     */
     /*@NSCopying*/ public var previousNode: NSXMLNode? {
         if let previousSibling = self.previousSibling {
-            if previousSibling._xmlNode.memory.last != nil {
-                return NSXMLNode._objectNodeForNode(previousSibling._xmlNode.memory.last)
+            if let result = previousSibling._lastChild {
+                return result
             } else {
                 return previousSibling
             }
@@ -507,9 +447,8 @@ public class NSXMLNode : NSObject, NSCopying {
         @abstract Returns the next node in document order. This can be used to walk the tree forwards.
     */
     /*@NSCopying*/ public var nextNode: NSXMLNode? {
-        let children = _xmlNode.memory.children
-        if children != nil {
-            return NSXMLNode._objectNodeForNode(children)
+        if let first = _firstChild {
+            return first
         } else if let next = nextSibling {
             return next
         } else if let parent = self.parent {
@@ -524,28 +463,23 @@ public class NSXMLNode : NSObject, NSCopying {
         @abstract Detaches this node from its parent.
     */
     public func detach() {
-        let parentPtr = _xmlNode.memory.parent
-        guard parentPtr != nil else { return }
-        xmlUnlinkNode(_xmlNode)
-
-        let parentNodePtr = parentPtr.memory._private
-        guard parentNodePtr != nil else { return }
-        let parent = Unmanaged<NSXMLNode>.fromOpaque(parentNodePtr).takeUnretainedValue()
-        parent._childNodes.remove(self)
+        parent?._removeNode(self)
     } //primitive
 
+    private func _removeNode(node: NSXMLNode) {
+        guard node.parent == self else { return }
+        _removeChildAtIndex(node.index)
+    }
     /*!
         @method XPath
         @abstract Returns the XPath to this node, for example foo/bar[2]/baz.
     */
     public var XPath: String? {
-        guard _xmlNode.memory.doc != nil else { return nil }
+        guard rootDocument != nil else { return nil }
 
         var pathComponents: [String?] = []
-        var parent: xmlNodePtr = _xmlNode.memory.parent
-        if parent != nil {
-            let parentObj = NSXMLNode._objectNodeForNode(parent)
-            let siblingsWithSameName = parentObj.filter { $0.name == self.name }
+        if let parent = parent  {
+            let siblingsWithSameName = parent.filter { $0.name == self.name }
 
             if siblingsWithSameName.count > 1 {
                 guard let index = siblingsWithSameName.indexOf(self) else { return nil }
@@ -557,16 +491,17 @@ public class NSXMLNode : NSObject, NSCopying {
         } else {
             return self.name
         }
+
+        var maybeParent = parent
         while true {
-            if parent.memory.parent != nil {
-                let grandparent = NSXMLNode._objectNodeForNode(parent.memory.parent)
+            if let grandparent = maybeParent?.parent {
                 let possibleParentNodes = grandparent.filter { $0.name == self.parent?.name }
                 let count = possibleParentNodes.reduce(0) {
                     return $0.0 + 1
                 }
 
                 if count <= 1 {
-                    pathComponents.append(NSXMLNode._objectNodeForNode(parent).name)
+                    pathComponents.append(maybeParent?.name)
                 } else {
                     var parentNumber = 1
                     for possibleParent in possibleParentNodes {
@@ -579,10 +514,10 @@ public class NSXMLNode : NSObject, NSCopying {
                     pathComponents.append("\(self.parent?.name ?? "")[\(parentNumber)]")
                 }
 
-                parent = parent.memory.parent
+                maybeParent = maybeParent?.parent
 
             } else {
-                pathComponents.append(NSXMLNode._objectNodeForNode(parent).name)
+                pathComponents.append(maybeParent?.name)
                 break
             }
         }
@@ -595,9 +530,12 @@ public class NSXMLNode : NSObject, NSCopying {
     	@abstract Returns the local name bar if this attribute or element's name is foo:bar
     */
     public var localName: String? {
-        var length: Int32 = 0
-        let result = xmlSplitQName3(_xmlNode.memory.name, &length)
-        return String.fromCString(UnsafePointer<CChar>(result))
+        if let name = self.name {
+            let nameParts = name.characters.split(":")
+            return String(nameParts.last)
+        }
+
+        return nil
     } //primitive
 
     /*!
@@ -605,74 +543,19 @@ public class NSXMLNode : NSObject, NSCopying {
     	@abstract Returns the prefix foo if this attribute or element's name if foo:bar
     */
     public var prefix: String? {
-        var result: UnsafeMutablePointer<xmlChar> = nil
-        let unused = xmlSplitQName2(_xmlNode.memory.name, &result)
-        defer {
-            xmlFree(result)
-            xmlFree(UnsafeMutablePointer<xmlChar>(unused))
+        if let name = self.name {
+            let nameParts = name.characters.split(":")
+            return String(nameParts.last)
         }
-        return String.fromCString(UnsafePointer<CChar>(result))
+
+        return nil
     } //primitive
 
     /*!
     	@method URI
     	@abstract Set the URI of this element, attribute, or document. For documents it is the URI of document origin. Getter returns the URI of this element, attribute, or document. For documents it is the URI of document origin and is automatically set when using initWithContentsOfURL.
     */
-    public var URI: String? { //primitive
-        get {
-            switch kind {
-            case .AttributeKind:
-                fallthrough
-            case .ElementKind:
-                return String.fromCString(UnsafePointer<CChar>(_xmlNode.memory.ns.memory.href))
-
-            case .DocumentKind:
-                let doc = unsafeBitCast(_xmlNode, xmlDocPtr.self)
-                return String.fromCString(UnsafePointer<CChar>(doc.memory.URL))
-
-            default:
-                return nil
-            }
-        }
-        set {
-            switch kind {
-            case .InvalidKind:
-                return
-
-            case .AttributeKind:
-                fallthrough
-            case .ElementKind:
-                guard let uri = newValue?._xmlString else {
-                    _xmlNode.memory.ns = nil
-                    return
-                }
-                defer { xmlFree(UnsafeMutablePointer<xmlChar>(uri)) }
-
-                var ns = xmlSearchNsByHref(_xmlNode.memory.doc, _xmlNode, uri)
-                if ns == nil {
-                    if _xmlNode.memory.ns != nil && _xmlNode.memory.ns.memory.href == nil {
-                        _xmlNode.memory.ns.memory.href = UnsafePointer<xmlChar>(xmlStrdup(uri))
-                        return
-                    }
-
-                    ns = xmlNewNs(_xmlNode, uri, nil)
-                }
-
-                xmlSetNs(_xmlNode, ns)
-
-            case .DocumentKind:
-                let URL = newValue?._xmlString
-                let doc = unsafeBitCast(_xmlNode, xmlDocPtr.self)
-                if doc.memory.URL != nil {
-                    xmlFree(UnsafeMutablePointer<xmlChar>(doc.memory.URL))
-                }
-                doc.memory.URL = URL ?? nil
-
-            default:
-                return
-            }
-        }
-    }
+    public var URI: String?  //primitive
 
     /*!
         @method localNameForName:
@@ -730,35 +613,21 @@ public class NSXMLNode : NSObject, NSCopying {
     */
     public func XMLStringWithOptions(options: Int) -> String {
 
-        let buffer = xmlBufferCreate()
-        defer { xmlBufferFree(buffer) }
-
-        var xmlOptions: UInt32 = XML_SAVE_AS_XML.rawValue
-        if (options & NSXMLNodePreserveWhitespace) != 0 {
-            xmlOptions |= XML_SAVE_WSNONSIG.rawValue
+        let elements = self.filter({ $0.kind == .ElementKind })
+        let attributes = self.filter({ $0.kind == .AttributeKind })
+        let name = self.name ?? ""
+        var result = "<\(name)"
+        for attribute in attributes {
+            result += " \(attribute.name ?? "")=\"\(attribute.stringValue ?? "")\""
+        }
+        result += ">"
+        result += stringValue ?? ""
+        for element in elements {
+            result += element.XMLStringWithOptions(options)
         }
 
-        if (options & NSXMLNodeCompactEmptyElement) == 0 {
-            xmlOptions |= XML_SAVE_NO_EMPTY.rawValue
-        }
-
-        if (options & NSXMLNodePrettyPrint) != 0 {
-            xmlOptions |= XML_SAVE_FORMAT.rawValue
-        }
-
-        let ctx = xmlSaveToBuffer(buffer, "utf-8", Int32(xmlOptions))
-        xmlSaveTree(ctx, _xmlNode)
-        let error = xmlSaveClose(ctx)
-
-        if error == -1 {
-            return ""
-        }
-
-        let bufferContents = xmlBufferContent(buffer)
-
-        let result = String.fromCString(UnsafePointer<CChar>(bufferContents))
-
-        return result ?? ""
+        result += "</\(name)>"
+        return result
     }
 
     /*!
@@ -773,21 +642,7 @@ public class NSXMLNode : NSObject, NSCopying {
     	@returns An array whose elements are a kind of NSXMLNode.
     */
     public func nodesForXPath(xpath: String) throws -> [NSXMLNode] {
-        guard _xmlNode.memory.doc != nil else { throw NSError(domain: "blah", code: -1, userInfo: nil) }
-        let context = xmlXPathNewContext(_xmlNode.memory.doc)
-        defer { xmlFree(context) }
-
-        let evalResult = xmlXPathNodeEval(_xmlNode, xpath, context)
-        defer { xmlFree(evalResult) }
-
-        let nodes = evalResult.memory.nodesetval
-        var result: [NSXMLNode] = []
-        let count = nodes.memory.nodeNr
-        for i in 0..<count {
-            result.append(NSXMLNode._objectNodeForNode(nodes.memory.nodeTab[Int(i)]))
-        }
-
-        return result
+        NSUnimplemented()
     }
 
     /*!
@@ -799,57 +654,46 @@ public class NSXMLNode : NSObject, NSCopying {
 
     public func objectsForXQuery(xquery: String) throws -> [AnyObject] { NSUnimplemented() }
 
-    internal var _childNodes: Set<NSXMLNode> = []
-
-    deinit {
-        for node in _childNodes {
-            node.detach()
-        }
-
-        if case .DocumentKind = kind { // documents have to be free'd explicitly as a document in order to not leak memory
-            xmlFreeDoc(xmlDocPtr(_xmlNode))
-        } else {
-            xmlFreeNode(_xmlNode)
-        }
-    }
-
-    internal init(ptr: xmlNodePtr) {
-        precondition(ptr != nil)
-        precondition(ptr.memory._private == nil, "Only one NSXMLNode per xmlNodePtr allowed")
-
-        _xmlNode = ptr
-        super.init()
-
-        let parent = _xmlNode.memory.parent
-        if parent != nil {
-            let parentNode = NSXMLNode._objectNodeForNode(parent)
-            parentNode._childNodes.insert(self)
-        }
-
-        let unmanaged = Unmanaged<NSXMLNode>.passUnretained(self)
-        _xmlNode.memory._private = UnsafeMutablePointer<Void>(unmanaged.toOpaque())
-    }
-
-    internal class func _objectNodeForNode(node: xmlNodePtr) -> NSXMLNode {
-        switch node.memory.type {
-        case XML_ELEMENT_NODE:
-            return NSXMLElement._objectNodeForNode(node)
-
-        case XML_DOCUMENT_NODE:
-            return NSXMLDocument._objectNodeForNode(node)
-
-        case XML_DTD_NODE:
-            return NSXMLDTD._objectNodeForNode(node)
-
-        default:
-            if node.memory._private != nil {
-                let unmanaged = Unmanaged<NSXMLNode>.fromOpaque(node.memory._private)
-                return unmanaged.takeUnretainedValue()
-            }
-
-            return NSXMLNode(ptr: node)
-        }
-    }
+//    internal var _childNodes: Set<NSXMLNode> = []
+//
+//    internal init(ptr: xmlNodePtr) {
+//        precondition(ptr != nil)
+//        precondition(ptr.memory._private == nil, "Only one NSXMLNode per xmlNodePtr allowed")
+//
+//        _xmlNode = ptr
+//        self.kind = .InvalidKind
+//        super.init()
+//
+//        let parent = _xmlNode.memory.parent
+//        if parent != nil {
+//            let parentNode = NSXMLNode._objectNodeForNode(parent)
+//            parentNode._childNodes.insert(self)
+//        }
+//
+//        let unmanaged = Unmanaged<NSXMLNode>.passUnretained(self)
+//        _xmlNode.memory._private = UnsafeMutablePointer<Void>(unmanaged.toOpaque())
+//    }
+//
+//    internal class func _objectNodeForNode(node: xmlNodePtr) -> NSXMLNode {
+//        switch node.memory.type {
+//        case XML_ELEMENT_NODE:
+//            return NSXMLElement._objectNodeForNode(node)
+//
+//        case XML_DOCUMENT_NODE:
+//            return NSXMLDocument._objectNodeForNode(node)
+//
+//        case XML_DTD_NODE:
+//            return NSXMLDTD._objectNodeForNode(node)
+//
+//        default:
+//            if node.memory._private != nil {
+//                let unmanaged = Unmanaged<NSXMLNode>.fromOpaque(node.memory._private)
+//                return unmanaged.takeUnretainedValue()
+//            }
+//
+//            return NSXMLNode(ptr: node)
+//        }
+//    }
 
     // libxml2 believes any node can have children, though NSXMLNode disagrees.
     // Nevertheless, this belongs here so that NSXMLElement and NSXMLDocument can share
@@ -859,17 +703,54 @@ public class NSXMLNode : NSObject, NSCopying {
         precondition(index <= childCount)
         precondition(child.parent == nil)
 
-        _childNodes.insert(child)
+        if index < childCount {
+            var prevChild = _firstChild
+            let nextChild: NSXMLNode?
+            if index > 0 {
+                for _ in 0..<(index - 1) {
+                    prevChild = prevChild?.nextSibling
+                }
+                nextChild = prevChild?.nextSibling
+            } else {
+                prevChild = nil
+                nextChild = _firstChild
+                _firstChild = child
+            }
 
-        if index == 0 {
-            let first = _xmlNode.memory.children
-            xmlAddPrevSibling(first, child._xmlNode)
+            child.previousSibling = prevChild
+            child.nextSibling = nextChild
+            prevChild?.nextSibling = child
+            nextChild?.previousSibling = child
+
+            if nextChild == nil {
+                _lastChild = child
+            } else {
+                var childToUpdate = nextChild
+                while childToUpdate != nil {
+                    childToUpdate?.index += 1
+                    childToUpdate = childToUpdate?.nextSibling
+                }
+            }
         } else {
-            let currChild = childAtIndex(index - 1)!._xmlNode
-            xmlAddNextSibling(currChild, child._xmlNode)
+            if let last = _lastChild {
+                _lastChild = child
+                last.nextSibling = child
+                child.previousSibling = last
+                child.nextSibling = nil
+            } else {
+                _firstChild = child
+                _lastChild = child
+                child.nextSibling = nil
+                child.previousSibling = nil
+            }
         }
-    } //primitive
 
+        childCount += 1
+
+        child.parent = self
+        child.index = index
+    } //primitive
+    
     // see above
     internal func _insertChildren(children: [NSXMLNode], atIndex index: Int) {
         for (childIndex, node) in children.enumerate() {
@@ -887,8 +768,32 @@ public class NSXMLNode : NSObject, NSCopying {
             fatalError("index out of bounds")
         }
 
-        _childNodes.remove(child)
-        xmlUnlinkNode(child._xmlNode)
+        if index == 0 {
+            _firstChild = child.nextSibling
+        }
+
+        if index == (childCount - 1) {
+            _lastChild = child.previousSibling
+        }
+
+        let next = child.nextSibling
+        let prev = child.previousSibling
+
+        next?.previousSibling = prev
+        prev?.nextSibling = next
+
+        child.nextSibling = nil
+        child.previousSibling = nil
+        child.parent = nil
+
+        childCount -= 1
+        child.index = -1
+
+        var childToUpdate = next
+        while childToUpdate != nil {
+            childToUpdate?.index -= 1
+            childToUpdate = childToUpdate?.nextSibling
+        }
     } //primitive
 
     // see above
@@ -909,10 +814,7 @@ public class NSXMLNode : NSObject, NSCopying {
      */
     // see above
     internal func _addChild(child: NSXMLNode) {
-        precondition(child.parent == nil)
-
-        xmlAddChild(_xmlNode, child._xmlNode)
-        _childNodes.insert(child)
+        _insertChild(child, atIndex: childCount)
     }
 
     /*!
@@ -921,41 +823,63 @@ public class NSXMLNode : NSObject, NSCopying {
      */
     // see above
     internal func _replaceChildAtIndex(index: Int, withNode node: NSXMLNode) {
+        precondition(index < childCount)
+        precondition(index >= 0)
+
         let child = childAtIndex(index)!
-        _childNodes.remove(child)
-        xmlReplaceNode(child._xmlNode, node._xmlNode)
-        _childNodes.insert(node)
+
+        node.nextSibling = child.nextSibling
+        node.previousSibling = child.previousSibling
+        node.parent = self
+        node.index = index
+
+        if _lastChild == child {
+            _lastChild = node
+        }
+
+        if _firstChild == child {
+            _firstChild = node
+        }
+
+        child.previousSibling?.nextSibling = node
+        child.nextSibling?.previousSibling = node
+
+        child.parent = nil
+        child.previousSibling = nil
+        child.nextSibling = nil
+        child.index = -1
     }
 }
 
 extension NSXMLNode: CollectionType {
     public struct Index: BidirectionalIndexType {
-        private let node: xmlNodePtr
+        private let node: NSXMLNode?
+        private let parent: NSXMLNode
 
         public func predecessor() -> Index {
-            guard node != nil else { return self }
-            return Index(node: node.memory.prev)
+            guard node != nil else { return Index(node: parent._lastChild, parent: parent) }
+            return Index(node: node?.previousSibling, parent: parent)
         }
 
         public func successor() -> Index {
-            guard node != nil else { return self }
-            return Index(node: node.memory.next)
+            guard node != nil else { return parent.startIndex }
+            return Index(node: node?.nextSibling, parent: parent)
         }
     }
 
     public subscript(index: Index) -> NSXMLNode {
-        return NSXMLNode._objectNodeForNode(index.node)
+        return index.node!
     }
 
     public var startIndex: Index {
-        return Index(node: _xmlNode.memory.children)
+        return Index(node: _firstChild, parent: self)
     }
 
     public var endIndex: Index {
-        return Index(node: nil)
+        return Index(node: nil, parent: self)
     }
 }
 
 public func ==(lhs: NSXMLNode.Index, rhs: NSXMLNode.Index) -> Bool {
-    return lhs.node == rhs.node
+    return lhs.node === rhs.node && lhs.parent === rhs.parent
 }

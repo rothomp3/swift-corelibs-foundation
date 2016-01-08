@@ -206,7 +206,12 @@ internal func isAParagraphSeparatorTypeCharacter(ch: unichar) -> Bool {
 }
 
 public class NSString : NSObject, NSCopying, NSMutableCopying, NSSecureCoding, NSCoding {
-    private let _cfinfo = _CFInfo(typeID: CFStringGetTypeID())
+    private let _cfinfo: _CFInfo = {
+        var info = _CFInfo(typeID: CFStringGetTypeID())
+        info.info |= 0xd0 // See CFString.c, this means "D0 (11010000 = default allocator, not inline, not freed contents; Unicode; is immutable)"
+        return info
+    }()
+
     internal var _storage: String
     
     public var length: Int {
@@ -279,7 +284,7 @@ public class NSString : NSObject, NSCopying, NSMutableCopying, NSSecureCoding, N
     public init(characters: UnsafePointer<unichar>, length: Int) {
         _storage = String._fromWellFormedCodeUnitSequence(UTF16.self, input: UnsafeBufferPointer(start: characters, count: length))
     }
-    
+
     public required convenience init(unicodeScalarLiteral value: StaticString) {
         self.init(stringLiteral: value)
     }

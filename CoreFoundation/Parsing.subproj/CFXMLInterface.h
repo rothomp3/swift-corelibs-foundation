@@ -227,6 +227,8 @@ CFIndex _CFXMLDTDElementNodeGetType(_CFXMLDTDNodePtr node);
 CFIndex _CFXMLDTDEntityNodeGetType(_CFXMLDTDNodePtr node);
 CFIndex _CFXMLDTDAttributeNodeGetType(_CFXMLDTDNodePtr node);
 
+void _CFXMLDTDNodeSetType(_CFXMLDTDNodePtr node, CFIndex type);
+
 CF_RETURNS_RETAINED CFStringRef _Nullable _CFXMLDTDNodeGetSystemID(_CFXMLDTDNodePtr node);
 void _CFXMLDTDNodeSetSystemID(_CFXMLDTDNodePtr node, const unsigned char* systemID);
 CF_RETURNS_RETAINED CFStringRef _Nullable _CFXMLDTDNodeGetPublicID(_CFXMLDTDNodePtr node);
